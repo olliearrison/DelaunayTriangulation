@@ -1,5 +1,5 @@
 /**
- * Parallel VLSI Wire Routing via OpenMP
+ * Parallel Delaunay Triangulation
  * Name 1(eleepalo), Name 2(darrison)
  */
 
