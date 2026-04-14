@@ -68,6 +68,27 @@ struct Wire {
   validate_wire_t to_validate_format(void) const;
 };
 
+struct Triangle {
+  int x, y, z;
+  vector<int> E; //encroach set
+  //neighbors
+  //index of the neighbor triangle in the mesh vector M
+  //-1 if no neighbor
+  int nbr_xy; //neighbor across edge (x,y)
+  int nbr_yz;
+  int nbr_zx;
+
+  bool active;
+};
+
+struct Mesh {
+  std::vector<Triangle> triangles;
+};
+
+struct Face {
+  int a, b;
+};
+
 // Definition of the wire checker
 struct wr_checker {
   std::vector<Wire> wires;
