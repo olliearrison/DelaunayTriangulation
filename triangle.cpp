@@ -99,31 +99,43 @@ void write_output(
 
 
 
-void E(Triangle t) {
-
-}
-
-//? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
-bool inCircle(int v, Triangle t, const std::vector<Point>& V) {
-  const Point& p = V[v];
-  const Point& a = V[t.x];
-  const Point& b = V[t.y];
-  const Point& c = V[t.z];
-
-
-  
+void E(triangle t, const std::vector<Point>& V) {
+  t.E.clear();
+  for (int i = 0; i < V.size(); i++){
+    if (i == t.x || i == t.y || i == t.z) continue;
 
     if (inCircle(V[i], t, V)){
       t.E.push_back(i);
     }
   }
-
+}
 
 //? Source for orientation math: https://www.cs.cmu.edu/~quake/robust.html
 //* returns positive if CCW, negative if CW, 0 otherwise (colinear)
 float orientation(const Point& a, const Point& b, const Point& c) {
   return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
+
+//? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
+bool inCircle(int v, Triangle t, const std::vector<Point>& V) {
+  const Point& p = V[v];
+  const Point& a = V[t.x] - p;
+  const Point& b = V[t.y] - p;
+  const Point& c = V[t.z] -p;
+
+  float det = ((a.x * a.x + a.y * a.y) + (b.x * c.y - b.y * c.x) -
+              (b.x * b.x + b.y * b.y) + (a.x * c.y - a.y * c.x) +
+              (c.x * c.x + c.y * c.y) + (a.x * b.y - a.y * b.x));
+
+  float orient = orientation(a, b, c);
+
+  if (orient > 0){
+    return det > 0;
+  } else {
+    return det < 0;
+  }
+  }
+
 
 //? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
 bool inCircle(int v, triangle t, const std::vector<Point>& V) {
