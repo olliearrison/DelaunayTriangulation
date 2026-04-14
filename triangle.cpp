@@ -101,20 +101,15 @@ void write_output(
 
 
 
-void E(triangle t) {
+void E(triangle t, const std::vector<Point>& V) {
+  t.E.clear();
+  for (int i = 0; i < V.size(); i++){
+    if (i == t.x || i == t.y || i == t.z) continue;
 
-}
-
-//? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
-bool inCircle(int v, triangle t, const std::vector<Point>& V) {
-  const Point& p = V[v];
-  const Point& a = V[t.x];
-  const Point& b = V[t.y];
-  const Point& c = V[t.z];
-
-
-  
-
+    if (inCircle(V[i], t, V)){
+      t.E.push_back(i);
+    }
+  }
 }
 
 //? Source for orientation math: https://www.cs.cmu.edu/~quake/robust.html
@@ -122,6 +117,29 @@ bool inCircle(int v, triangle t, const std::vector<Point>& V) {
 float orientation(const Point& a, const Point& b, const Point& c) {
   return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
+
+//? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
+bool inCircle(int v, triangle t, const std::vector<Point>& V) {
+  const Point& p = V[v];
+  //* put triangle so p is at origin
+  const Point a = V[t.x] - p;
+  const Point b = V[t.y] - p;
+  const Point c = V[t.z] - p;
+
+  float det = ((a.x * a.x + a.y * a.y) + (b.x * c.y - b.y * c.x) -
+              (b.x * b.x + b.y * b.y) + (a.x * c.y - a.y * c.x) +
+              (c.x * c.x + c.y * c.y) + (a.x * b.y - a.y * b.x));
+
+  float orient = orientation(a, b, c);
+
+  if (orient > 0){
+    return det > 0;
+  } else {
+    return det < 0;
+  }
+  
+}
+
 
 
 //! In future might want to ensure all points in input are represented in output!
