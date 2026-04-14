@@ -14,31 +14,7 @@
 #define COST_REPORT_DEPTH 10
 
 /** README(student):
- We provide a way to validate consistency between wire layout
- and occupancy. Within the program, a wire checker is provided 
- by:
- wr_checker Checker(wires, occupancy);
- and its validate() method can be called to validate the consistency.
- 
- The struct below is the standard format for wires used by the wire checker.
- It contains a buffer that holds up to MAX_PTS_PER_WIRE points, and a num_pts
- field that specifies the number of points. Regardless of what representation you use for your wires, you should
- implement the Wire::to_validate_format method to convert your Wire
- to a validate_wire_t if you wish to use the checker.
-*/
 
-/* validate_wire_t is a format to represent wires by key points
-
-For example a wire with 3 bend has 5 key poinst:
-start, bend1, bend2, bend3, end.
-Notice this implies two consecutive keypoints share at least same x or same y
-
-num_pts is number of keypoints
-p is an array store the xy coordinates of each keypoints
-
-Requires (see validate.cpp validate_wire_t::cleanup() for how is this
-checked）： (1) two consecutive keypoints share at least same x or same y, (2) 2
-<= num_pts <= MAX_PTS_PER_WIRE.
 */
 struct validate_wire_t {
   uint8_t num_pts;

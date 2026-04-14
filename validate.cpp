@@ -7,6 +7,9 @@
 #define GREEN "\x1b[32m"
 #define RESET "\x1b[0m"
 
+
+
+
 // YOU DON'T NEED TO CHANGE THIS FILE
 
 void validate_wire_t::print_wire() const {

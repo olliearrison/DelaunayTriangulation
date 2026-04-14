@@ -99,17 +99,62 @@ void write_output(
 
 //DELAUNAY TRIANGULATION START**
 
-struct Point {
-  int x,y;
-}
+
 
 void E(triangle t) {
 
 }
 
-bool inCircle(int v, triangle t) {
+//? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
+bool inCircle(int v, triangle t, const std::vector<Point>& V) {
+  const Point& p = V[v];
+  const Point& a = V[t.x];
+  const Point& b = V[t.y];
+  const Point& c = V[t.z];
+
+
+  
 
 }
+
+//? Source for orientation math: https://www.cs.cmu.edu/~quake/robust.html
+//* returns positive if CCW, negative if CW, 0 otherwise (colinear)
+float orientation(const Point& a, const Point& b, const Point& c) {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+
+//! In future might want to ensure all points in input are represented in output!
+bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
+  for (const Triangle& t : M.triangles){
+    if (!t.active) continue;
+
+    const Point& a = V[t.x];
+    const Point& b = V[t.y];
+    const Point& c = V[t.z];
+
+    //* ensure triangle isn't degenerate
+    if (orientation(a) == 0.0f){
+      printf("Degenerate triangle! %d %d %d\n", t.x, t.y, t.z);
+      return false;
+    }
+
+    //* check circumcircle property
+    for (int i = 0; i < V.size(); i++){
+      if (i == t.x || i == t.y || i == t.z) continue;
+
+      if (inCircle(V[i], t, V)){
+        //* 
+        printf("Point %d inside of circumcircle of triangle %d %d %d!\n", i, t.x, t.y, t.z);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+
+
 
 void setNeighbor(Triangle&t, Face f, int neighborInd) {
   //if f is edge (x,y)
