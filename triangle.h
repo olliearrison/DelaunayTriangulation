@@ -27,6 +27,14 @@ struct validate_wire_t {
 };
 
 
+struct Point {
+  int x, y;
+};
+
+
+inline Point operator+(Point a, Point b){
+    return Point{a.x + b.x, a.y + b.y};
+}
 struct Triangle {
   int x, y, z;
   vector<int> E; //encroach set
