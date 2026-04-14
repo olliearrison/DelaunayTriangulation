@@ -21,8 +21,6 @@
 #include <omp.h>
 #include <unistd.h>
 
-Triangle NO_TRIANGLE = {-1,-1,-1};
-
 void print_stats(const std::vector<std::vector<int>> &occupancy)
 {
   int max_occupancy = 0;
@@ -101,12 +99,12 @@ void write_output(
 
 
 
-void E(triangle t) {
+void E(Triangle t) {
 
 }
 
 //? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
-bool inCircle(int v, triangle t, const std::vector<Point>& V) {
+bool inCircle(int v, Triangle t, const std::vector<Point>& V) {
   const Point& p = V[v];
   const Point& a = V[t.x];
   const Point& b = V[t.y];
@@ -171,7 +169,6 @@ void setNeighbor(Triangle&t, Face f, int neighborInd) {
 
 //in algo, need to make sure to fill in encroach sets for t and t0
 
-//point v shouldnt be int...in real numbers?
 void replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Point>& V) {
 
   Triangle& t = M.triangles[tInd];
@@ -227,6 +224,8 @@ void replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Po
   //detach t -- more complicated bc need to take care of neighbors...
   //**possibly do this at the end in main: detach all triangles in R...need to know about the
   //other new triangles
+  t.active = false; //mark here just to be safe
+  //will do the actual detaching, neigbor stuff later in main
 
   //reconnect t0 to tt across face f
   if (t0Ind != -1) {
@@ -247,39 +246,6 @@ void replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Po
 //connect new triangles to each other along the edges that include v, since adjacent boundary faces
 //produce adjacent new triangles
 //then mark all triangles in R active = false
-
-
-
-int main() {
-
-  //make tb bounding triangle - convex hull
-
-  //E(tb) = V (input points)
-
-  //set M = {tb}
-
-  //for (int i = 0; i < n; i++)
-
-    //for each t in M, if V[i] in E(t), then add t to R
-    
-    //foreach face f on boundary of R:
-    //for each triangle t in R:
-      // this means edge (x,y) is a face-no other triangle uses it or only a triangle outside of R i.e. its a border edge
-      // if (t.nbr_xy == -1 || !inR(t.nbr_xy)) {
-      //   f = (x,y);
-      //   t0 = t.nbr_xy;
-      //   replaceBoundary(t0,f,t,v,M,V); for t0 and t just pass in their index in M...
-      // }
-      // //repeat for (y,z) and (z,x)
-
-      //special case... no t0, and t = tb or the curr triangle...
-      //(t,t0) = 2 triangles incident on f, with t on V[i] side
-      //populate t.E and t0.E
-      //populate neighbors for t and t0
-      //replaceBoundary(t0, f, t, V[i], M)
-
-  //return M
-}
 
 //DELAUNAY END**
 
@@ -353,7 +319,7 @@ int main(int argc, char *argv[])
 
 
   //ADDED FOR DELAUNAY START
-  int n;
+  int n; //number of points
   fin >> n;
 
   std::vector<Points> V(n);
@@ -367,6 +333,62 @@ int main(int argc, char *argv[])
   {
     std::cout << i << ": (" << V[i].x << ", " << V[i].y << ")\n";
   }
+
+
+  Mesh M;
+
+  Triangle tb;
+  //make tb bounding triangle - convex hull
+
+  //tb's encroach set is all of V
+  for (int i = 0; i < n; i++) {
+    tb.E.pushback(i);
+  }
+
+  //M = {tb}
+  M.triangles.push_back(tb);
+
+  //iterate through all points: V[i]
+  for (int i = 0; i < n; i++) { //index of corresponding point into V
+    //initialize R...
+    std::vector<Triangle> R;
+    for (Triangle t : M.triangles) {
+      //if V[i] in E(t), then add t to R
+      for (int j : t.E) { //j is index of corresponding point into V
+        if (i == t.E[j]) {
+          //add t to R
+          R.pushback(t);
+        }
+      }
+    }
+
+    for (Triangle t : R) {
+      //edge is a face is no other triangle uses it (-1)
+      //or if only triangle outside of R shares it
+      if (t.nbr_xy == -1 || !inR(t.nbr_xy,R)) { 
+        Face f = (t.x,t.y);
+        t0 = t.nbr_xy;
+        //make sure references match up...
+        replaceBoundary(t0, f, t, i, M, V);
+      }
+      if (t.nbr_yz == -1 || !inR(t.nbr_yz,R)) {
+        Face f = (t.y, t.z);
+        t0 = t.nbr_yz;
+        replaceBoundary(t0, f, t, i, M, V);
+      }
+      if (t.nbr_zx == -1 || !inR(t.nbr_zx,R)) {
+        Face f = (t.z, t.x);
+        t0 = t.nbr_zx;
+        replaceBoundary(t0, f, t, i, M, V);
+      }
+    }
+
+    //need to do detaching for all triangles in R
+    //plus update neighbors for all triangles...bc of new triangles
+  }
+
+  //return M
+
   //ADDED FOR DELAUNAY END
 
 
