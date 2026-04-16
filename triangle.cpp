@@ -44,71 +44,60 @@ void print_stats(const std::vector<std::vector<int>> &occupancy)
 (2) It convert wires from Wire to validate_wire_t by to_validate_format
 (2) It write wires into another file
 */
-void write_output(
-    const std::vector<Wire> &wires, const int num_wires,
-    const std::vector<std::vector<int>> &occupancy, const int dim_x,
-    const int dim_y,
-    std::string wires_output_file_path = "outputs/wire_output.txt",
-    std::string occupancy_output_file_path = "outputs/occ_output.txt")
-{
+// void write_output(
+//     const std::vector<Wire> &wires, const int num_wires,
+//     const std::vector<std::vector<int>> &occupancy, const int dim_x,
+//     const int dim_y,
+//     std::string wires_output_file_path = "outputs/wire_output.txt",
+//     std::string occupancy_output_file_path = "outputs/occ_output.txt")
+// {
 
-  std::ofstream out_occupancy(occupancy_output_file_path, std::fstream::out);
-  if (!out_occupancy)
-  {
-    std::cerr << "Unable to open file: " << occupancy_output_file_path << '\n';
-    exit(EXIT_FAILURE);
-  }
-  out_occupancy << dim_x << ' ' << dim_y << '\n';
+//   std::ofstream out_occupancy(occupancy_output_file_path, std::fstream::out);
+//   if (!out_occupancy)
+//   {
+//     std::cerr << "Unable to open file: " << occupancy_output_file_path << '\n';
+//     exit(EXIT_FAILURE);
+//   }
+//   out_occupancy << dim_x << ' ' << dim_y << '\n';
 
-  for (const auto &row : occupancy)
-  {
-    for (size_t i = 0; i < row.size(); ++i)
-      out_occupancy << row[i] << (i == row.size() - 1 ? "" : " ");
-    out_occupancy << '\n';
-  }
-  out_occupancy.close();
+//   for (const auto &row : occupancy)
+//   {
+//     for (size_t i = 0; i < row.size(); ++i)
+//       out_occupancy << row[i] << (i == row.size() - 1 ? "" : " ");
+//     out_occupancy << '\n';
+//   }
+//   out_occupancy.close();
 
-  std::ofstream out_wires(wires_output_file_path, std::fstream::out);
-  if (!out_wires)
-  {
-    std::cerr << "Unable to open file: " << wires_output_file_path << '\n';
-    exit(EXIT_FAILURE);
-  }
+//   std::ofstream out_wires(wires_output_file_path, std::fstream::out);
+//   if (!out_wires)
+//   {
+//     std::cerr << "Unable to open file: " << wires_output_file_path << '\n';
+//     exit(EXIT_FAILURE);
+//   }
 
-  out_wires << dim_x << ' ' << dim_y << '\n';
-  out_wires << num_wires << '\n';
+//   out_wires << dim_x << ' ' << dim_y << '\n';
+//   out_wires << num_wires << '\n';
 
-  for (const auto &wire : wires)
-  {
-    // NOTICE: we convert to keypoint representation here, using
-    // to_validate_format which need to be defined in the bottom of this file
-    validate_wire_t keypoints = wire.to_validate_format();
-    for (int i = 0; i < keypoints.num_pts; ++i)
-    {
-      out_wires << keypoints.p[i].x << ' ' << keypoints.p[i].y;
-      if (i < keypoints.num_pts - 1)
-        out_wires << ' ';
-    }
-    out_wires << '\n';
-  }
+//   for (const auto &wire : wires)
+//   {
+//     // NOTICE: we convert to keypoint representation here, using
+//     // to_validate_format which need to be defined in the bottom of this file
+//     validate_wire_t keypoints = wire.to_validate_format();
+//     for (int i = 0; i < keypoints.num_pts; ++i)
+//     {
+//       out_wires << keypoints.p[i].x << ' ' << keypoints.p[i].y;
+//       if (i < keypoints.num_pts - 1)
+//         out_wires << ' ';
+//     }
+//     out_wires << '\n';
+//   }
 
-  out_wires.close();
-}
+//   out_wires.close();
+// }
 
 //DELAUNAY TRIANGULATION START**
 
 
-
-void E(triangle t, const std::vector<Point>& V) {
-  t.E.clear();
-  for (int i = 0; i < V.size(); i++){
-    if (i == t.x || i == t.y || i == t.z) continue;
-
-    if (inCircle(V[i], t, V)){
-      t.E.push_back(i);
-    }
-  }
-}
 
 //? Source for orientation math: https://www.cs.cmu.edu/~quake/robust.html
 //* returns positive if CCW, negative if CW, 0 otherwise (colinear)
@@ -118,36 +107,18 @@ float orientation(const Point& a, const Point& b, const Point& c) {
 
 //? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
 bool inCircle(int v, Triangle t, const std::vector<Point>& V) {
+  if (v == t.x || v == t.y || v == t.z) {
+    return false;
+  }
+
   const Point& p = V[v];
   const Point& a = V[t.x] - p;
   const Point& b = V[t.y] - p;
-  const Point& c = V[t.z] -p;
+  const Point& c = V[t.z] - p;
 
-  float det = ((a.x * a.x + a.y * a.y) + (b.x * c.y - b.y * c.x) -
-              (b.x * b.x + b.y * b.y) + (a.x * c.y - a.y * c.x) +
-              (c.x * c.x + c.y * c.y) + (a.x * b.y - a.y * b.x));
-
-  float orient = orientation(a, b, c);
-
-  if (orient > 0){
-    return det > 0;
-  } else {
-    return det < 0;
-  }
-  }
-
-
-//? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
-bool inCircle(int v, triangle t, const std::vector<Point>& V) {
-  const Point& p = V[v];
-  //* put triangle so p is at origin
-  const Point a = V[t.x] - p;
-  const Point b = V[t.y] - p;
-  const Point c = V[t.z] - p;
-
-  float det = ((a.x * a.x + a.y * a.y) + (b.x * c.y - b.y * c.x) -
-              (b.x * b.x + b.y * b.y) + (a.x * c.y - a.y * c.x) +
-              (c.x * c.x + c.y * c.y) + (a.x * b.y - a.y * b.x));
+  float det = ((a.x * a.x + a.y * a.y) * (b.x * c.y - b.y * c.x)
+             - (b.x * b.x + b.y * b.y) * (a.x * c.y - a.y * c.x)
+             + (c.x * c.x + c.y * c.y) * (a.x * b.y - a.y * b.x));
 
   float orient = orientation(a, b, c);
 
@@ -156,8 +127,41 @@ bool inCircle(int v, triangle t, const std::vector<Point>& V) {
   } else {
     return det < 0;
   }
-  
 }
+
+void E(Triangle t, const std::vector<Point>& V) {
+  t.E.clear();
+  for (int i = 0; i < V.size(); i++){
+    if (i == t.x || i == t.y || i == t.z) continue;
+
+    if (inCircle(i, t, V)){
+      t.E.push_back(i);
+    }
+  }
+}
+
+
+// //? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
+// bool inCircle(int v, triangle t, const std::vector<Point>& V) {
+//   const Point& p = V[v];
+//   //* put triangle so p is at origin
+//   const Point a = V[t.x] - p;
+//   const Point b = V[t.y] - p;
+//   const Point c = V[t.z] - p;
+
+//   float det = ((a.x * a.x + a.y * a.y) + (b.x * c.y - b.y * c.x) -
+//               (b.x * b.x + b.y * b.y) + (a.x * c.y - a.y * c.x) +
+//               (c.x * c.x + c.y * c.y) + (a.x * b.y - a.y * b.x));
+
+//   float orient = orientation(a, b, c);
+
+//   if (orient > 0){
+//     return det > 0;
+//   } else {
+//     return det < 0;
+//   }
+  
+// }
 
 
 
@@ -171,7 +175,7 @@ bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
     const Point& c = V[t.z];
 
     //* ensure triangle isn't degenerate
-    if (orientation(a) == 0.0f){
+    if (orientation(a,b,c) == 0.0f){
       printf("Degenerate triangle! %d %d %d\n", t.x, t.y, t.z);
       return false;
     }
@@ -180,7 +184,7 @@ bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
     for (int i = 0; i < V.size(); i++){
       if (i == t.x || i == t.y || i == t.z) continue;
 
-      if (inCircle(V[i], t, V)){
+      if (inCircle(i, t, V)){
         //* 
         printf("Point %d inside of circumcircle of triangle %d %d %d!\n", i, t.x, t.y, t.z);
         return false;
@@ -190,10 +194,22 @@ bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
   return true;
 }
 
+//detaches triangle t on face f
+void clearNeighbor(Triangle& t, Face f) {
+  //if f is edge (x,y)
+  if ((t.x == f.a && t.y == f.b) || (t.x == f.b && t.y == f.a)) {
+    t.nbr_xy = -1;
+  }
+  else if ((t.y == f.a && t.z == f.b) || (t.y == f.b && t.z == f.a)) {
+    t.nbr_yz = -1;
+  }
+  else if ((t.z == f.a && t.x == f.b) || (t.z == f.b && t.x == f.a)) {
+    t.nbr_zx = -1;
+  }
+}
 
-
-
-void setNeighbor(Triangle&t, Face f, int neighborInd) {
+//set t's neighbor as triangle M.triangles[neighborInd] on face f
+void setNeighbor(Triangle& t, Face f, int neighborInd) {
   //if f is edge (x,y)
   if ((t.x == f.a && t.y == f.b) || (t.x == f.b && t.y == f.a)) {
     t.nbr_xy = neighborInd;
@@ -206,9 +222,88 @@ void setNeighbor(Triangle&t, Face f, int neighborInd) {
   }
 }
 
-//in algo, need to make sure to fill in encroach sets for t and t0
+//returns true if x is in vec
+bool contains(const std::vector<int>& vec, int x) {
+  return std::find(vec.begin(), vec.end(), x) != vec.end();
+}
 
-void replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Point>& V) {
+//returns true if edge (a,b) and (c,d) are the same edge
+bool sameEdge(int a, int b, int c, int d) {
+  return (a == c && b == d) || (a == d && b == c);
+}
+
+//returns 0 if t's edge (x,y) is same edges as (a,b)
+//returns 1 if t's edge (y,z) is same edges as (a,b)
+//returns 2 if t's edge (z,x) is same edges as (a,b)
+//returns -1 if none of t's edges is same edges as (a,b)
+int getEdgeInd(const Triangle& t, int a, int b) {
+  //edge (x,y)
+  if ((t.x == a && t.y == b) || (t.x == b && t.y == a)) {
+    return 0;
+  }
+  //edge (y,z)
+  if ((t.y == a && t.z == b) || (t.y == b && t.z == a)) {
+    return 1;
+  }
+  //edge (z,x) 
+  if ((t.z == a && t.x == b) || (t.z == b && t.x == a)) {
+    return 2;
+  }
+
+  return -1; //none of t's edges match edge (a,b)
+}
+
+
+void setNeighborByEdgeInd(Triangle& t, int edgeInd, int neighborInd) {
+  if (edgeInd == 0) {
+    t.nbr_xy = neighborInd;
+  }
+  else if (edgeInd == 1) {
+    t.nbr_yz = neighborInd;
+  }
+  else if (edgeInd == 2) {
+    t.nbr_zx = neighborInd;
+  }
+
+  //nothing if edgeInd == -1
+}
+
+bool sharedEdgeInfo(const Triangle& t1, const Triangle& t2, int& t1EdgeInd, int& t2EdgeInd) {
+  //check against t1 edge (x,y)
+  t2EdgeInd = getEdgeInd(t2,t1.x,t1.y);
+  if (t2EdgeInd != -1) {
+    t1EdgeInd = 0; //indicates t2 is t1's xy neighbor
+    return true;
+  }
+
+  //check against t1 edge (y,z)
+  t2EdgeInd = getEdgeInd(t2,t1.y,t1.z);
+  if (t2EdgeInd != -1) {
+    t1EdgeInd = 1; //indicates t2 is t1's yz neighbor
+    return true;
+  }
+
+  //check against t1 edge (z,x)
+  t2EdgeInd = getEdgeInd(t2,t1.z,t1.x);
+  if (t2EdgeInd != -1) {
+    t1EdgeInd = 2; //indicates t2 is t1's zx neighbor
+    return true;
+  }
+
+  return false; //if none of t1 and t2's edges match
+}
+
+void connectIfNeighbors(int t1Ind, int t2Ind, Mesh& M) {
+  int e1, e2;
+
+  if (sharedEdgeInfo(M.triangles[t1Ind], M.triangles[t2Ind], e1, e2)) {
+    setNeighborByEdgeInd(M.triangles[t1Ind], e1, t2Ind);
+    setNeighborByEdgeInd(M.triangles[t2Ind], e2, t1Ind);
+  }
+}
+
+
+int replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Point>& V) {
 
   Triangle& t = M.triangles[tInd];
 
@@ -226,7 +321,7 @@ void replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Po
   //only check the points in E(t0) and E(t) to make E(tt)
   for (int i = 0; i < t.E.size(); i++) {
     int p = t.E[i];
-    if (inCircle(V[p],tt)) {
+    if (inCircle(p,tt,V)) {
       tt.E.push_back(p);
     }
   }
@@ -245,26 +340,21 @@ void replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Po
         }
       }
 
-      if (!duplicate && inCircle(V[p], tt)) {
+      if (!duplicate && inCircle(p, tt,V)) {
         tt.E.push_back(p);
       }
     }
   }
 
-
   //add tt to M
   M.triangles.push_back(tt);
   int ttInd = M.triangles.size() -1;
 
-  //!!how to detach t from face f in M 
-  //before: t0 is adjacent to t across f
-  //after: t0 is adjacent to tt across f
+  //detach t from ONLY face f here in M
+  //this means: before t0 is adjacent to t across f
+  //after t0 is adjacent to tt across f
 
-  //detach t -- more complicated bc need to take care of neighbors...
-  //**possibly do this at the end in main: detach all triangles in R...need to know about the
-  //other new triangles
-  t.active = false; //mark here just to be safe
-  //will do the actual detaching, neigbor stuff later in main
+  clearNeighbor(M.triangles[tInd], f);
 
   //reconnect t0 to tt across face f
   if (t0Ind != -1) {
@@ -272,6 +362,9 @@ void replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Po
     setNeighbor(M.triangles[ttInd],f,t0Ind);
   }
 
+  //will do the actual detaching, neigbor stuff later in main (with all the new triangles)
+
+  return ttInd;
 }
 
 //find cavity R: all active triangles whose E set has v's index
@@ -361,7 +454,7 @@ int main(int argc, char *argv[])
   int n; //number of points
   fin >> n;
 
-  std::vector<Points> V(n);
+  std::vector<Point> V(n);
 
   for (int i = 0; i < n; i++) {
     fin >> V[i].x >> V[i].y;
@@ -377,11 +470,16 @@ int main(int argc, char *argv[])
   Mesh M;
 
   Triangle tb;
-  //make tb bounding triangle - convex hull
+  //!!make tb bounding triangle - convex hull
+
+  tb.nbr_xy = -1;
+  tb.nbr_yz = -1;
+  tb.nbr_zx = -1;
+  tb.active = true;
 
   //tb's encroach set is all of V
   for (int i = 0; i < n; i++) {
-    tb.E.pushback(i);
+    tb.E.push_back(i);
   }
 
   //M = {tb}
@@ -389,40 +487,69 @@ int main(int argc, char *argv[])
 
   //iterate through all points: V[i]
   for (int i = 0; i < n; i++) { //index of corresponding point into V
-    //initialize R...
-    std::vector<Triangle> R;
-    for (Triangle t : M.triangles) {
-      //if V[i] in E(t), then add t to R
-      for (int j : t.E) { //j is index of corresponding point into V
-        if (i == t.E[j]) {
-          //add t to R
-          R.pushback(t);
-        }
+    std::vector<int> R;
+
+    //build cavity R
+    for (int j = 0; j < M.triangles.size(); j++) {
+      if (!M.triangles[j].active) continue;
+
+      if (contains(M.triangles[j].E,i)) { //if point i is in E(j), then add j to R 
+        R.push_back(j);
       }
     }
 
-    for (Triangle t : R) {
+    std::vector<int> newTriangles;
+
+    for (int t = 0; t < R.size(); t++) { //for each triangle in R, check which are faces - if is, do replacing
+      int tInd = R[t];
+
       //edge is a face is no other triangle uses it (-1)
       //or if only triangle outside of R shares it
-      if (t.nbr_xy == -1 || !inR(t.nbr_xy,R)) { 
-        Face f = (t.x,t.y);
-        t0 = t.nbr_xy;
-        //make sure references match up...
-        replaceBoundary(t0, f, t, i, M, V);
+      if (M.triangles[tInd].nbr_xy == -1 || !contains(R,M.triangles[tInd].nbr_xy)) { 
+        Face f;
+        f.a = M.triangles[tInd].x;
+        f.b = M.triangles[tInd].y;
+        int t0Ind = M.triangles[tInd].nbr_xy;
+
+        newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
       }
-      if (t.nbr_yz == -1 || !inR(t.nbr_yz,R)) {
-        Face f = (t.y, t.z);
-        t0 = t.nbr_yz;
-        replaceBoundary(t0, f, t, i, M, V);
+      if (M.triangles[tInd].nbr_yz == -1 || !contains(R,M.triangles[tInd].nbr_yz)) {
+        Face f;
+        f.a = M.triangles[tInd].y;
+        f.b = M.triangles[tInd].z;
+        int t0Ind = M.triangles[tInd].nbr_yz;
+
+        newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
       }
-      if (t.nbr_zx == -1 || !inR(t.nbr_zx,R)) {
-        Face f = (t.z, t.x);
-        t0 = t.nbr_zx;
-        replaceBoundary(t0, f, t, i, M, V);
+      if (M.triangles[tInd].nbr_zx == -1 || !contains(R,M.triangles[tInd].nbr_zx)) {
+        Face f;
+        f.a = M.triangles[tInd].z;
+        f.b = M.triangles[tInd].x;
+        int t0Ind = M.triangles[tInd].nbr_zx;
+
+        newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
       }
     }
 
-    //need to do detaching for all triangles in R
+    //set neighbors for all the added triangles
+    //they should only be with each other (the outside ones were taken care of in replaceBoundary already)
+    for (int a = 0; a < newTriangles.size(); a++) {
+      for (int b = a+1; b < newTriangles.size(); b++) {
+        connectIfNeighbors(newTriangles[a], newTriangles[b], M);
+      }
+    }
+
+     //deactivate all the triangles in R
+     for (int t : R) {
+      M.triangles[R[t]].active = false;
+      //is marking neighbors -1 needed? / wont hurt anything right?
+      M.triangles[R[t]].nbr_xy = -1;
+      M.triangles[R[t]].nbr_yz = -1;
+      M.triangles[R[t]].nbr_zx = -1;
+     }
+
+
+    //need to do detaching for all triangles in R -- or should i still be doing this in replaceBoundary
     //plus update neighbors for all triangles...bc of new triangles
   }
 
@@ -461,40 +588,40 @@ int main(int argc, char *argv[])
           .count();
   std::cout << "Computation time (sec): " << compute_time << '\n';
 
-  /* wire to run check on wires and occupancy */
-  wr_checker checker(wires, occupancy);
-  checker.validate();
+  // /* wire to run check on wires and occupancy */
+  // wr_checker checker(wires, occupancy);
+  // checker.validate();
 
-  /* Write wires and occupancy matrix to files */
-  print_stats(occupancy);
-  write_output(wires, num_wires, occupancy, dim_x, dim_y);
+  // /* Write wires and occupancy matrix to files */
+  // print_stats(occupancy);
+  // write_output(wires, num_wires, occupancy, dim_x, dim_y);
 }
 
 /* TODO (student): implement to_validate_format to convert Wire to
   validate_wire_t keypoint representation in order to run checker and
   write output
 */
-validate_wire_t Wire::to_validate_format(void) const
-{
-  validate_wire_t w;
+// validate_wire_t Wire::to_validate_format(void) const
+// {
+//   validate_wire_t w;
 
-  // num of keypoints: start + bends + end
-  w.num_pts = 2 + numBends;
+//   // num of keypoints: start + bends + end
+//   w.num_pts = 2 + numBends;
 
-  // start
-  w.p[0].x = start_x;
-  w.p[0].y = start_y;
+//   // start
+//   w.p[0].x = start_x;
+//   w.p[0].y = start_y;
 
-  // bends
-  for (int i = 0; i < numBends; i++)
-  {
-    w.p[i + 1].x = bendsX[i];
-    w.p[i + 1].y = bendsY[i];
-  }
+//   // bends
+//   for (int i = 0; i < numBends; i++)
+//   {
+//     w.p[i + 1].x = bendsX[i];
+//     w.p[i + 1].y = bendsY[i];
+//   }
 
-  // end
-  w.p[w.num_pts - 1].x = end_x;
-  w.p[w.num_pts - 1].y = end_y;
+//   // end
+//   w.p[w.num_pts - 1].x = end_x;
+//   w.p[w.num_pts - 1].y = end_y;
 
-  return w;
-}
+//   return w;
+// }

@@ -16,15 +16,15 @@
 /** README(student):
 
 */
-struct validate_wire_t {
-  uint8_t num_pts;
-  struct {
-    uint16_t x;
-    uint16_t y;
-  } p[MAX_PTS_PER_WIRE];
-  validate_wire_t &cleanup(void);
-  void print_wire(void) const;
-};
+// struct validate_wire_t {
+//   uint8_t num_pts;
+//   struct {
+//     uint16_t x;
+//     uint16_t y;
+//   } p[MAX_PTS_PER_WIRE];
+//   validate_wire_t &cleanup(void);
+//   void print_wire(void) const;
+// };
 
 
 struct Point {
@@ -35,9 +35,14 @@ struct Point {
 inline Point operator+(Point a, Point b){
     return Point{a.x + b.x, a.y + b.y};
 }
+
+inline Point operator-(Point a, Point b){
+    return Point{a.x - b.x, a.y - b.y};
+}
+
 struct Triangle {
   int x, y, z;
-  vector<int> E; //encroach set
+  std::vector<int> E; //encroach set
   //neighbors
   //index of the neighbor triangle in the mesh vector M
   //-1 if no neighbor
@@ -57,18 +62,18 @@ struct Face {
 };
 
 // Definition of the wire checker
-struct wr_checker {
-  std::vector<Wire> wires;
-  std::vector<std::vector<int>> occupancies;
-  const int nwires;
-  const int dim_x;
-  const int dim_y;
-  wr_checker(std::vector<Wire> &wires,
-             std::vector<std::vector<int>> &occupancies)
-      : wires(wires), occupancies(occupancies), nwires(wires.size()),
-        dim_x(occupancies[0].size()), dim_y(occupancies.size()) {}
-  void validate() const;
-};
+// struct wr_checker {
+//   std::vector<Wire> wires;
+//   std::vector<std::vector<int>> occupancies;
+//   const int nwires;
+//   const int dim_x;
+//   const int dim_y;
+//   wr_checker(std::vector<Wire> &wires,
+//              std::vector<std::vector<int>> &occupancies)
+//       : wires(wires), occupancies(occupancies), nwires(wires.size()),
+//         dim_x(occupancies[0].size()), dim_y(occupancies.size()) {}
+//   void validate() const;
+// };
 
 const char *get_option_string(const char *option_name,
                               const char *default_value);
