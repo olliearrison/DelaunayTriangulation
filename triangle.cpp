@@ -18,7 +18,7 @@
 #include <set>
 #include <utility>
 
-#include <omp.h>
+//!#include <omp.h>
 #include <unistd.h>
 
 void print_stats(const std::vector<std::vector<int>> &occupancy)
@@ -39,65 +39,6 @@ void print_stats(const std::vector<std::vector<int>> &occupancy)
   std::cout << "Total cost: " << total_cost << '\n';
 }
 
-/* This function write the output into 2 files
-(1) It write occupancy grids into a file
-(2) It convert wires from Wire to validate_wire_t by to_validate_format
-(2) It write wires into another file
-*/
-// void write_output(
-//     const std::vector<Wire> &wires, const int num_wires,
-//     const std::vector<std::vector<int>> &occupancy, const int dim_x,
-//     const int dim_y,
-//     std::string wires_output_file_path = "outputs/wire_output.txt",
-//     std::string occupancy_output_file_path = "outputs/occ_output.txt")
-// {
-
-//   std::ofstream out_occupancy(occupancy_output_file_path, std::fstream::out);
-//   if (!out_occupancy)
-//   {
-//     std::cerr << "Unable to open file: " << occupancy_output_file_path << '\n';
-//     exit(EXIT_FAILURE);
-//   }
-//   out_occupancy << dim_x << ' ' << dim_y << '\n';
-
-//   for (const auto &row : occupancy)
-//   {
-//     for (size_t i = 0; i < row.size(); ++i)
-//       out_occupancy << row[i] << (i == row.size() - 1 ? "" : " ");
-//     out_occupancy << '\n';
-//   }
-//   out_occupancy.close();
-
-//   std::ofstream out_wires(wires_output_file_path, std::fstream::out);
-//   if (!out_wires)
-//   {
-//     std::cerr << "Unable to open file: " << wires_output_file_path << '\n';
-//     exit(EXIT_FAILURE);
-//   }
-
-//   out_wires << dim_x << ' ' << dim_y << '\n';
-//   out_wires << num_wires << '\n';
-
-//   for (const auto &wire : wires)
-//   {
-//     // NOTICE: we convert to keypoint representation here, using
-//     // to_validate_format which need to be defined in the bottom of this file
-//     validate_wire_t keypoints = wire.to_validate_format();
-//     for (int i = 0; i < keypoints.num_pts; ++i)
-//     {
-//       out_wires << keypoints.p[i].x << ' ' << keypoints.p[i].y;
-//       if (i < keypoints.num_pts - 1)
-//         out_wires << ' ';
-//     }
-//     out_wires << '\n';
-//   }
-
-//   out_wires.close();
-// }
-
-//DELAUNAY TRIANGULATION START**
-
-
 
 //? Source for orientation math: https://www.cs.cmu.edu/~quake/robust.html
 //* returns positive if CCW, negative if CW, 0 otherwise (colinear)
@@ -107,6 +48,11 @@ float orientation(const Point& a, const Point& b, const Point& c) {
 
 //? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
 bool inCircle(int v, Triangle t, const std::vector<Point>& V) {
+  assert(v >= 0 && v < V.size());
+  assert(t.x >= 0 && t.x < V.size());
+  assert(t.y >= 0 && t.y < V.size());
+  assert(t.z >= 0 && t.z < V.size());
+
   if (v == t.x || v == t.y || v == t.z) {
     return false;
   }
@@ -139,31 +85,6 @@ void E(Triangle t, const std::vector<Point>& V) {
     }
   }
 }
-
-
-// //? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
-// bool inCircle(int v, triangle t, const std::vector<Point>& V) {
-//   const Point& p = V[v];
-//   //* put triangle so p is at origin
-//   const Point a = V[t.x] - p;
-//   const Point b = V[t.y] - p;
-//   const Point c = V[t.z] - p;
-
-//   float det = ((a.x * a.x + a.y * a.y) + (b.x * c.y - b.y * c.x) -
-//               (b.x * b.x + b.y * b.y) + (a.x * c.y - a.y * c.x) +
-//               (c.x * c.x + c.y * c.y) + (a.x * b.y - a.y * b.x));
-
-//   float orient = orientation(a, b, c);
-
-//   if (orient > 0){
-//     return det > 0;
-//   } else {
-//     return det < 0;
-//   }
-  
-// }
-
-
 
 //! In future might want to ensure all points in input are represented in output!
 bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
@@ -466,10 +387,24 @@ int main(int argc, char *argv[])
     std::cout << i << ": (" << V[i].x << ", " << V[i].y << ")\n";
   }
 
+  const double init_time =
+    std::chrono::duration_cast<std::chrono::duration<double>>(
+      std::chrono::steady_clock::now() - init_start).count();
+      std::cout << "Initialization time (sec): " << std::fixed
+      << std::setprecision(10) << init_time << '\n';
+
+  const auto compute_start = std::chrono::steady_clock::now();
+
+  //* Timing Code Start
+
 
   Mesh M;
 
   Triangle tb;
+  //!! JUST FOR DEBUGGING
+  tb.x = 0;
+  tb.y = 1;
+  tb.z = 2;
   //!!make tb bounding triangle - convex hull
 
   tb.nbr_xy = -1;
@@ -540,8 +475,9 @@ int main(int argc, char *argv[])
     }
 
      //deactivate all the triangles in R
+     
      for (int t : R) {
-      M.triangles[R[t]].active = false;
+      M.triangles[t].active = false;
       //is marking neighbors -1 needed? / wont hurt anything right?
       M.triangles[R[t]].nbr_xy = -1;
       M.triangles[R[t]].nbr_yz = -1;
@@ -561,67 +497,39 @@ int main(int argc, char *argv[])
   /* Initialize any additional data structures needed in the algorithm */
 
   // Student code end
-  const double init_time =
-      std::chrono::duration_cast<std::chrono::duration<double>>(
-          std::chrono::steady_clock::now() - init_start)
-          .count();
-  std::cout << "Initialization time (sec): " << std::fixed
-            << std::setprecision(10) << init_time << '\n';
-
-  const auto compute_start = std::chrono::steady_clock::now();
-
-  /* TODO (student code start): Implement the wire routing algorithm here and
-    feel free to structure the algorithm into different functions.
-    Don't use global variables.
-    Use OpenMP to parallelize the algorithm.
-  */
 
 
 
 
 
-  // Student code end
-  // DON'T CHANGE THE FOLLOWING CODE
+  //* Timing Code End
+
   const double compute_time =
       std::chrono::duration_cast<std::chrono::duration<double>>(
           std::chrono::steady_clock::now() - compute_start)
           .count();
-  std::cout << "Computation time (sec): " << compute_time << '\n';
+  std::cout << "Computation time (sec): " << compute_time << "\n";
 
-  // /* wire to run check on wires and occupancy */
-  // wr_checker checker(wires, occupancy);
-  // checker.validate();
+  bool valid = isDelaunay(M, V);
 
-  // /* Write wires and occupancy matrix to files */
-  // print_stats(occupancy);
-  // write_output(wires, num_wires, occupancy, dim_x, dim_y);
+  if (valid){
+    std::cout << "Valid Delaunay Triangulation :)\n";
+  } else {
+    std::cout << "Invalid Delaunay Triangulation :( \n";
+  }
+
+
+  std::ofstream out("outputs/dummy.txt");
+  if (!out) {
+      std::cerr << "Failed to open outputs/dummy.txt\n";
+      exit(EXIT_FAILURE);
+  }
+
+  for (auto t : M.triangles){
+    out << t.x << " " << t.y << " " << t.z << "\n";
+  }
+  
+  out.close();
+
 }
 
-/* TODO (student): implement to_validate_format to convert Wire to
-  validate_wire_t keypoint representation in order to run checker and
-  write output
-*/
-// validate_wire_t Wire::to_validate_format(void) const
-// {
-//   validate_wire_t w;
-
-//   // num of keypoints: start + bends + end
-//   w.num_pts = 2 + numBends;
-
-//   // start
-//   w.p[0].x = start_x;
-//   w.p[0].y = start_y;
-
-//   // bends
-//   for (int i = 0; i < numBends; i++)
-//   {
-//     w.p[i + 1].x = bendsX[i];
-//     w.p[i + 1].y = bendsY[i];
-//   }
-
-//   // end
-//   w.p[w.num_pts - 1].x = end_x;
-//   w.p[w.num_pts - 1].y = end_y;
-
-//   return w;
-// }

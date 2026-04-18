@@ -7,7 +7,7 @@
 #define __WIREOPT_H__
 
 #include <cstdint>
-#include <omp.h>
+//!#include <omp.h>
 #include <vector>
 
 #define MAX_PTS_PER_WIRE 5
