@@ -88,11 +88,20 @@ void E(Triangle &t, const std::vector<Point>& V) {
 
 //! In future might want to ensure all points in input are represented in output!
 bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
+
+  std::vector<int> found(M.n, 0);
+
+  //* check all triangles are valid delaunay triangles
   for (const Triangle& t : M.triangles){
     if (!t.active) continue;
     if (t.x >= M.n || t.y >= M.n || t.z >= M.n) continue;
     //* ignore any triangles containing points that are part of the initial 
     //* super triangle
+
+    //* ensure all points are found
+    found[t.x] ++;
+    found[t.y] ++;
+    found[t.z] ++;
 
     const Point& a = V[t.x];
     const Point& b = V[t.y];
@@ -115,6 +124,13 @@ bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
       }
     }
   }
+
+  for (auto t: found){
+    if (t == 0){
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -520,8 +536,6 @@ int main(int argc, char *argv[])
   } else {
     assert(false);
   }
-
-  
 
   
 
