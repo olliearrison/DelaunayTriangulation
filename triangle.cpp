@@ -349,8 +349,11 @@ int main(int argc, char *argv[])
   }
 
   // Check if required options are provided
+  //* I for incremental
+  //* D for divide-and-conquer
+  //* S for sequential (incremental)
   if ((input_filename.empty()) || num_threads <= 0 || SA_iters <= 0 ||
-      (parallel_mode != 'A' && parallel_mode != 'W') || batch_size <= 0)
+      (parallel_mode != 'I' && parallel_mode != 'D' && parallel_mode != 'S') || batch_size <= 0)
   {
     std::cerr << "Usage: " << argv[0]
               << " -f input_filename -n num_threads [-p SA_prob] [-i SA_iters] "
@@ -399,116 +402,128 @@ int main(int argc, char *argv[])
       std::cout << "Initialization time (sec): " << std::fixed
       << std::setprecision(10) << init_time << '\n';
 
+  //* Timing Code Start
   const auto compute_start = std::chrono::steady_clock::now();
 
-  //* Timing Code Start
+  //* sequential
+  if (parallel_mode == 'S'){
+    Triangle tb;
+
+    //* get bounding box
+    float minx = V[0].x, maxx = V[0].x;
+    float miny = V[0].y, maxy = V[0].y;
+    
+    for (int i = 0; i < n; i++){
+      minx = std::min(V[i].x, minx);
+      maxx = std::max(V[i].x, maxx);
+      miny = std::min(V[i].y, miny);
+      maxy = std::max(V[i].y, maxy);
+    }
+    float d = std::max(maxx-minx, maxy-miny);
+    if (d == 0) d = 1.0;
+
+    //* super triangle calculation: https://www.gorillasun.de/blog/bowyer-watson-algorithm-for-delaunay-triangulation/#the-super-triangle
+    V.push_back({minx-10*d, miny-10*d});
+    V.push_back({maxx+10*d, miny-10*d});
+    V.push_back({(minx+maxx)/2, maxy+10*d});
+
+    tb.x = V.size()-3;
+    tb.y = V.size()-2;  tb.z = V.size()-1;
+
+    tb.nbr_xy = -1;
+    tb.nbr_yz = -1;
+    tb.nbr_zx = -1;
+    tb.active = true;
+
+    //tb's encroach set is all of V
+    for (int i = 0; i < n; i++) {
+      tb.E.push_back(i);
+    }
+
+    //M = {tb}
+    M.triangles.push_back(tb);
+
+    //iterate through all points: V[i]
+    for (int i = 0; i < n; i++) { //index of corresponding point into V
+      std::vector<int> R;
+
+      //build cavity R
+      for (int j = 0; j < M.triangles.size(); j++) {
+        if (!M.triangles[j].active) continue;
+
+        if (contains(M.triangles[j].E,i)) { //if point i is in E(j), then add j to R 
+          R.push_back(j);
+        }
+      }
+
+      std::vector<int> newTriangles;
+
+      for (int t = 0; t < R.size(); t++) { //for each triangle in R, check which are faces - if is, do replacing
+        int tInd = R[t];
+
+        //edge is a face is no other triangle uses it (-1)
+        //or if only triangle outside of R shares it
+        if (M.triangles[tInd].nbr_xy == -1 || !contains(R,M.triangles[tInd].nbr_xy)) { 
+          Face f;
+          f.a = M.triangles[tInd].x;
+          f.b = M.triangles[tInd].y;
+          int t0Ind = M.triangles[tInd].nbr_xy;
+
+          newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
+        }
+        if (M.triangles[tInd].nbr_yz == -1 || !contains(R,M.triangles[tInd].nbr_yz)) {
+          Face f;
+          f.a = M.triangles[tInd].y;
+          f.b = M.triangles[tInd].z;
+          int t0Ind = M.triangles[tInd].nbr_yz;
+
+          newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
+        }
+        if (M.triangles[tInd].nbr_zx == -1 || !contains(R,M.triangles[tInd].nbr_zx)) {
+          Face f;
+          f.a = M.triangles[tInd].z;
+          f.b = M.triangles[tInd].x;
+          int t0Ind = M.triangles[tInd].nbr_zx;
+
+          newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
+        }
+      }
+
+      //set neighbors for all the added triangles
+      //they should only be with each other (the outside ones were taken care of in replaceBoundary already)
+      for (int a = 0; a < newTriangles.size(); a++) {
+        for (int b = a+1; b < newTriangles.size(); b++) {
+          connectIfNeighbors(newTriangles[a], newTriangles[b], M);
+        }
+      }
+
+      //deactivate all the triangles in R
+      
+      for (int t : R) {
+        M.triangles[t].active = false;
+        //is marking neighbors -1 needed? / wont hurt anything right?
+        M.triangles[t].nbr_xy = -1;
+        M.triangles[t].nbr_yz = -1;
+        M.triangles[t].nbr_zx = -1;
+      }
 
 
+      //need to do detaching for all triangles in R -- or should i still be doing this in replaceBoundary
+      //plus update neighbors for all triangles...bc of new triangles
+    }
+  //* parallel incremental
+  } else if (parallel_mode == 'I'){
+    printf("Starting incremental\n");
+  //* parallel divide-and-conquer
+  } else if (parallel_mode == 'D'){
+    printf("Starting divide-and-conquer \n");
+  } else {
+    assert(false);
+  }
 
-  Triangle tb;
-
-  //* get bounding box
-  float minx = V[0].x, maxx = V[0].x;
-  float miny = V[0].y, maxy = V[0].y;
   
-  for (int i = 0; i < n; i++){
-    minx = std::min(V[i].x, minx);
-    maxx = std::max(V[i].x, maxx);
-    miny = std::min(V[i].y, miny);
-    maxy = std::max(V[i].y, maxy);
-  }
-  float d = std::max(maxx-minx, maxy-miny);
-  if (d == 0) d = 1.0;
 
-  //* super triangle calculation: https://www.gorillasun.de/blog/bowyer-watson-algorithm-for-delaunay-triangulation/#the-super-triangle
-  V.push_back({minx-10*d, miny-10*d});
-  V.push_back({maxx+10*d, miny-10*d});
-  V.push_back({(minx+maxx)/2, maxy+10*d});
-
-  tb.x = V.size()-3;
-  tb.y = V.size()-2;  tb.z = V.size()-1;
-
-  tb.nbr_xy = -1;
-  tb.nbr_yz = -1;
-  tb.nbr_zx = -1;
-  tb.active = true;
-
-  //tb's encroach set is all of V
-  for (int i = 0; i < n; i++) {
-    tb.E.push_back(i);
-  }
-
-  //M = {tb}
-  M.triangles.push_back(tb);
-
-  //iterate through all points: V[i]
-  for (int i = 0; i < n; i++) { //index of corresponding point into V
-    std::vector<int> R;
-
-    //build cavity R
-    for (int j = 0; j < M.triangles.size(); j++) {
-      if (!M.triangles[j].active) continue;
-
-      if (contains(M.triangles[j].E,i)) { //if point i is in E(j), then add j to R 
-        R.push_back(j);
-      }
-    }
-
-    std::vector<int> newTriangles;
-
-    for (int t = 0; t < R.size(); t++) { //for each triangle in R, check which are faces - if is, do replacing
-      int tInd = R[t];
-
-      //edge is a face is no other triangle uses it (-1)
-      //or if only triangle outside of R shares it
-      if (M.triangles[tInd].nbr_xy == -1 || !contains(R,M.triangles[tInd].nbr_xy)) { 
-        Face f;
-        f.a = M.triangles[tInd].x;
-        f.b = M.triangles[tInd].y;
-        int t0Ind = M.triangles[tInd].nbr_xy;
-
-        newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
-      }
-      if (M.triangles[tInd].nbr_yz == -1 || !contains(R,M.triangles[tInd].nbr_yz)) {
-        Face f;
-        f.a = M.triangles[tInd].y;
-        f.b = M.triangles[tInd].z;
-        int t0Ind = M.triangles[tInd].nbr_yz;
-
-        newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
-      }
-      if (M.triangles[tInd].nbr_zx == -1 || !contains(R,M.triangles[tInd].nbr_zx)) {
-        Face f;
-        f.a = M.triangles[tInd].z;
-        f.b = M.triangles[tInd].x;
-        int t0Ind = M.triangles[tInd].nbr_zx;
-
-        newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
-      }
-    }
-
-    //set neighbors for all the added triangles
-    //they should only be with each other (the outside ones were taken care of in replaceBoundary already)
-    for (int a = 0; a < newTriangles.size(); a++) {
-      for (int b = a+1; b < newTriangles.size(); b++) {
-        connectIfNeighbors(newTriangles[a], newTriangles[b], M);
-      }
-    }
-
-     //deactivate all the triangles in R
-     
-     for (int t : R) {
-      M.triangles[t].active = false;
-      //is marking neighbors -1 needed? / wont hurt anything right?
-      M.triangles[t].nbr_xy = -1;
-      M.triangles[t].nbr_yz = -1;
-      M.triangles[t].nbr_zx = -1;
-     }
-
-
-    //need to do detaching for all triangles in R -- or should i still be doing this in replaceBoundary
-    //plus update neighbors for all triangles...bc of new triangles
-  }
+  
 
   //return M
 
