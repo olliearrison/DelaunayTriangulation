@@ -28,7 +28,7 @@
 
 
 struct Point {
-  int x, y;
+  float x, y;
 };
 
 
@@ -54,6 +54,7 @@ struct Triangle {
 };
 
 struct Mesh {
+  int n;
   std::vector<Triangle> triangles;
 };
 

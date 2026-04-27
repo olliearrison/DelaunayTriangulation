@@ -75,7 +75,7 @@ bool inCircle(int v, Triangle t, const std::vector<Point>& V) {
   }
 }
 
-void E(Triangle t, const std::vector<Point>& V) {
+void E(Triangle &t, const std::vector<Point>& V) {
   t.E.clear();
   for (int i = 0; i < V.size(); i++){
     if (i == t.x || i == t.y || i == t.z) continue;
@@ -90,6 +90,9 @@ void E(Triangle t, const std::vector<Point>& V) {
 bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
   for (const Triangle& t : M.triangles){
     if (!t.active) continue;
+    if (t.x >= M.n || t.y >= M.n || t.z >= M.n) continue;
+    //* ignore any triangles containing points that are part of the initial 
+    //* super triangle
 
     const Point& a = V[t.x];
     const Point& b = V[t.y];
@@ -346,7 +349,7 @@ int main(int argc, char *argv[])
   }
 
   // Check if required options are provided
-  if (empty(input_filename) || num_threads <= 0 || SA_iters <= 0 ||
+  if ((input_filename.empty()) || num_threads <= 0 || SA_iters <= 0 ||
       (parallel_mode != 'A' && parallel_mode != 'W') || batch_size <= 0)
   {
     std::cerr << "Usage: " << argv[0]
@@ -375,6 +378,9 @@ int main(int argc, char *argv[])
   int n; //number of points
   fin >> n;
 
+  Mesh M;
+  M.n = n;
+
   std::vector<Point> V(n);
 
   for (int i = 0; i < n; i++) {
@@ -398,14 +404,29 @@ int main(int argc, char *argv[])
   //* Timing Code Start
 
 
-  Mesh M;
 
   Triangle tb;
-  //!! JUST FOR DEBUGGING
-  tb.x = 0;
-  tb.y = 1;
-  tb.z = 2;
-  //!!make tb bounding triangle - convex hull
+
+  //* get bounding box
+  float minx = V[0].x, maxx = V[0].x;
+  float miny = V[0].y, maxy = V[0].y;
+  
+  for (int i = 0; i < n; i++){
+    minx = std::min(V[i].x, minx);
+    maxx = std::max(V[i].x, maxx);
+    miny = std::min(V[i].y, miny);
+    maxy = std::max(V[i].y, maxy);
+  }
+  float d = std::max(maxx-minx, maxy-miny);
+  if (d == 0) d = 1.0;
+
+  //* super triangle calculation: https://www.gorillasun.de/blog/bowyer-watson-algorithm-for-delaunay-triangulation/#the-super-triangle
+  V.push_back({minx-10*d, miny-10*d});
+  V.push_back({maxx+10*d, miny-10*d});
+  V.push_back({(minx+maxx)/2, maxy+10*d});
+
+  tb.x = V.size()-3;
+  tb.y = V.size()-2;  tb.z = V.size()-1;
 
   tb.nbr_xy = -1;
   tb.nbr_yz = -1;
@@ -479,9 +500,9 @@ int main(int argc, char *argv[])
      for (int t : R) {
       M.triangles[t].active = false;
       //is marking neighbors -1 needed? / wont hurt anything right?
-      M.triangles[R[t]].nbr_xy = -1;
-      M.triangles[R[t]].nbr_yz = -1;
-      M.triangles[R[t]].nbr_zx = -1;
+      M.triangles[t].nbr_xy = -1;
+      M.triangles[t].nbr_yz = -1;
+      M.triangles[t].nbr_zx = -1;
      }
 
 
@@ -525,9 +546,15 @@ int main(int argc, char *argv[])
       exit(EXIT_FAILURE);
   }
 
-  for (auto t : M.triangles){
-    out << t.x << " " << t.y << " " << t.z << "\n";
+  for (auto &t : M.triangles) {
+      if (!t.active) continue;
+      if (t.x >= n || t.y >= n || t.z >= n) continue;
+      //* ignore any triangles containing points that are part of the initial 
+      //* super triangle
+      out << t.x << " " << t.y << " " << t.z << "\n";
   }
+
+
   
   out.close();
 
