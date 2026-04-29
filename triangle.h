@@ -9,6 +9,7 @@
 #include <cstdint>
 //!#include <omp.h>
 #include <vector>
+#include <set>
 
 #define MAX_PTS_PER_WIRE 5
 #define COST_REPORT_DEPTH 10
@@ -31,7 +32,6 @@ struct Point {
   float x, y;
 };
 
-
 inline Point operator+(Point a, Point b){
     return Point{a.x + b.x, a.y + b.y};
 }
@@ -40,6 +40,7 @@ inline Point operator-(Point a, Point b){
     return Point{a.x - b.x, a.y - b.y};
 }
 
+//for incremental algo
 struct Triangle {
   int x, y, z;
   std::vector<int> E; //encroach set
@@ -52,15 +53,37 @@ struct Triangle {
 
   bool active;
 };
-
 struct Mesh {
   int n;
   std::vector<Triangle> triangles;
 };
-
 struct Face {
   int a, b;
 };
+
+//for divide and conquer algo
+struct TriangleDC {
+  int v[3]; //vertices
+  TriangleDC* adj[3]; //adj[i] is opposite v[i] 
+
+  TriangleDC(int a, int b, int c) { //a,b,c are indices for their points into V
+        v[0] = a;
+        v[1] = b;
+        v[2] = c;
+
+        adj[0] = nullptr;
+        adj[1] = nullptr;
+        adj[2] = nullptr;
+    }
+};
+struct TriangulationDC {
+  // std::vector<TriangleDC*> triangles;
+
+  //graph[a] contains all point ind connected to a by an active edge
+  std::vector<std::set<int>> graph;
+
+};
+
 
 // Definition of the wire checker
 // struct wr_checker {
