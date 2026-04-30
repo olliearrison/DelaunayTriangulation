@@ -18,7 +18,7 @@
 #include <set>
 #include <utility>
 
-//!#include <omp.h>
+#include <omp.h>
 #include <unistd.h>
 
 void print_stats(const std::vector<std::vector<int>> &occupancy)
@@ -370,7 +370,7 @@ bool inCircleDC(const std::vector<Point>& V, int l, int r, int lCand, int rCand)
 }
 
 //initialize subsets (of 2 or 3 points) as edge or "triangle" - automatic triangulation
-TriangulationDC triangulateInit(std::vector<Point>& V, int lo, int hi) {
+TriangulationDC triangulateInit(const std::vector<Point>& V, int lo, int hi) {
   TriangulationDC T;
   T.graph.resize(V.size());
   int n = hi - lo; //number of points in subset
@@ -659,7 +659,7 @@ TriangulationDC mergeTriangulations(TriangulationDC L, TriangulationDC R, const 
 }
 
 //divide and conquer recursive algo
-TriangulationDC divideAndConquer(std::vector<Point>& V, int lo, int hi) {
+TriangulationDC divideAndConquer(const std::vector<Point>& V, int lo, int hi) {
   //number of points in this subset
   int n = hi - lo; //range is [lo, hi) (lo inclusive, hi exclusive)
 
@@ -672,6 +672,37 @@ TriangulationDC divideAndConquer(std::vector<Point>& V, int lo, int hi) {
 
   TriangulationDC L = divideAndConquer(V, lo, mid);
   TriangulationDC R = divideAndConquer(V, mid, hi);
+
+  return mergeTriangulations(L, R, V);
+}
+
+//divide and conquer parallel recursive algo
+TriangulationDC divideAndConquerPar(const std::vector<Point>& V, int lo, int hi) {
+  //number of points in this subset
+  int n = hi - lo; //range is [lo, hi) (lo inclusive, hi exclusive)
+
+  if (n <= 3) { //i.e. n = 2 (make line/edge) or n = 3 (make triangle)
+    return triangulateInit(V, lo, hi);
+  }
+
+  //else: split again
+  int mid = lo + n / 2;
+
+  TriangulationDC L;
+  TriangulationDC R;
+
+  #pragma omp task shared(L) if (n > 1024)
+  {
+    L = divideAndConquerPar(V, lo, mid);
+  }
+
+  #pragma omp task shared(R) if (n > 1024)
+  {
+    R = divideAndConquerPar(V, mid, hi);
+  }
+
+
+  #pragma omp taskwait
 
   return mergeTriangulations(L, R, V);
 }
@@ -882,7 +913,7 @@ int main(int argc, char *argv[])
   //* D for divide-and-conquer
   //* S for sequential (incremental)
   if ((input_filename.empty()) || num_threads <= 0 || SA_iters <= 0 ||
-      (parallel_mode != 'I' && parallel_mode != 'D' && parallel_mode != 'S') || batch_size <= 0)
+      (parallel_mode != 'I' && parallel_mode != 'D' && parallel_mode != 'S' && parallel_mode != 'P') || batch_size <= 0)
   {
     std::cerr << "Usage: " << argv[0]
               << " -f input_filename -n num_threads [-p SA_prob] [-i SA_iters] "
@@ -1042,9 +1073,9 @@ int main(int argc, char *argv[])
   //* parallel incremental
   } else if (parallel_mode == 'I'){
     printf("Starting incremental\n");
-  //* parallel divide-and-conquer
   } else if (parallel_mode == 'D'){
-    printf("Starting divide-and-conquer \n");
+    //sequential divide and conquer
+    printf("Starting seq divide-and-conquer \n");
     //algorithm based off of Guibas and Stolfi; used this as a reference: http://www.geom.uiuc.edu/~samuelp/del_project.html#algorithms
 
     //order points by x coordinates (use y coords to tie break)
@@ -1056,10 +1087,10 @@ int main(int argc, char *argv[])
         return (a.x < b.x);
       } });
 
-    std::cout << "Read " << n << " points:\n";
-    for (int i = 0; i < n; i++) {
-      std::cout << i << ": (" << V[i].x << ", " << V[i].y << ")\n";
-    }
+    // std::cout << "Read " << n << " points:\n";
+    // for (int i = 0; i < n; i++) {
+    //   std::cout << i << ": (" << V[i].x << ", " << V[i].y << ")\n";
+    // }
 
     //important to do this because need to run the python visualization with the sorted points
     std::string name = input_filename.substr(input_filename.find_last_of("/\\") + 1);
@@ -1071,6 +1102,43 @@ int main(int argc, char *argv[])
     sortedPts.close();
 
     res = divideAndConquer(V, 0, V.size()); 
+
+  } else if (parallel_mode == 'P') {
+    //parallel divide and conquer
+    printf("Starting par divide-and-conquer \n");
+
+    //order points by x coordinates (use y coords to tie break)
+    std::sort(V.begin(), V.end(), [](const Point& a, const Point& b) {
+      if (a.x == b.x) {
+        return (a.y < b.y);
+      }
+      else {
+        return (a.x < b.x);
+      } });
+
+    // std::cout << "Read " << n << " points:\n";
+    // for (int i = 0; i < n; i++) {
+    //   std::cout << i << ": (" << V[i].x << ", " << V[i].y << ")\n";
+    // }
+
+    //important to do this because need to run the python visualization with the sorted points
+    std::string name = input_filename.substr(input_filename.find_last_of("/\\") + 1);
+    std::ofstream sortedPts("inputs/sorted_" + name);
+    sortedPts << V.size() << "\n";
+    for (const Point& p : V) {
+      sortedPts << p.x << " " << p.y << "\n";
+    }
+    sortedPts.close();
+
+    omp_set_num_threads(num_threads);
+
+    #pragma omp parallel
+    {
+      #pragma omp single
+      {
+        res = divideAndConquerPar(V, 0, V.size()); 
+      }
+    }
 
   } else {
     assert(false);
@@ -1090,7 +1158,7 @@ int main(int argc, char *argv[])
     //FOR INCREMENTAL
     valid = isDelaunay(M, V);
 
-  } else if (parallel_mode == 'D') {
+  } else if (parallel_mode == 'D' || parallel_mode == 'P') {
     //FOR DIVIDE AND CONQUER
     valid = isDelaunayDC(res,V);
   }
@@ -1117,7 +1185,7 @@ int main(int argc, char *argv[])
       //* super triangle
       out << t.x << " " << t.y << " " << t.z << "\n";
     }
-  } else if (parallel_mode == 'D') {
+  } else if (parallel_mode == 'D' || parallel_mode == 'P') {
     //FOR DIVIDE AND CONQUER
     auto tris = getTriangles(res, V);
 
