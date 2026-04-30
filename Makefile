@@ -4,7 +4,7 @@ OBJS=triangle.o
 
 CXX = g++
 
-BASE_FLAGS = -Wall -O3 -std=c++17 -m64 -I. -Wno-unknown-pragmas
+BASE_FLAGS = -Wall -O2 -g -std=c++17 -m64 -I. -Wno-unknown-pragmas
 OPENMP_FLAGS = -fopenmp
 CXXFLAGS = $(BASE_FLAGS) $(OPENMP_FLAGS)
 

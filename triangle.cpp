@@ -21,6 +21,16 @@
 #include <omp.h>
 #include <unistd.h>
 
+// double time_sort = 0.0;
+// double time_dc_total = 0.0;
+// double time_merge_total = 0.0;
+// double time_graph_combine = 0.0;
+// double time_baseLR = 0.0;
+// double time_candidates = 0.0;
+// double time_add_edges = 0.0;
+// double time_validation = 0.0;
+// double time_output = 0.0;
+
 void print_stats(const std::vector<std::vector<int>> &occupancy)
 {
   int max_occupancy = 0;
@@ -39,273 +49,418 @@ void print_stats(const std::vector<std::vector<int>> &occupancy)
   std::cout << "Total cost: " << total_cost << '\n';
 }
 
-
 //? Source for orientation math: https://www.cs.cmu.edu/~quake/robust.html
 //* returns positive if CCW, negative if CW, 0 otherwise (colinear)
-float orientation(const Point& a, const Point& b, const Point& c) {
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+float orientation(const Point &a, const Point &b, const Point &c)
+{
+ return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
 
 //? Source for inCircle math: https://www.cs.cmu.edu/~quake/robust.html
-bool inCircle(int v, Triangle t, const std::vector<Point>& V) {
-  assert(v >= 0 && v < V.size());
-  assert(t.x >= 0 && t.x < V.size());
-  assert(t.y >= 0 && t.y < V.size());
-  assert(t.z >= 0 && t.z < V.size());
+bool inCircle(int v, Triangle t, const std::vector<Point> &V)
+{
+ assert(v >= 0 && v < V.size());
+ assert(t.x >= 0 && t.x < V.size());
+ assert(t.y >= 0 && t.y < V.size());
+ assert(t.z >= 0 && t.z < V.size());
 
-  if (v == t.x || v == t.y || v == t.z) {
-    return false;
-  }
+ if (v == t.x || v == t.y || v == t.z)
+ {
+ return false;
+ }
 
-  const Point& p = V[v];
-  const Point& a = V[t.x] - p;
-  const Point& b = V[t.y] - p;
-  const Point& c = V[t.z] - p;
+ const Point &p = V[v];
+ const Point &a = V[t.x] - p;
+ const Point &b = V[t.y] - p;
+ const Point &c = V[t.z] - p;
 
-  float det = ((a.x * a.x + a.y * a.y) * (b.x * c.y - b.y * c.x)
-             - (b.x * b.x + b.y * b.y) * (a.x * c.y - a.y * c.x)
-             + (c.x * c.x + c.y * c.y) * (a.x * b.y - a.y * b.x));
+ float det = ((a.x * a.x + a.y * a.y) * (b.x * c.y - b.y * c.x) - (b.x * b.x + b.y * b.y) * (a.x * c.y - a.y * c.x) + (c.x * c.x + c.y * c.y) * (a.x * b.y - a.y * b.x));
 
-  float orient = orientation(a, b, c);
+ float orient = orientation(a, b, c);
 
-  if (orient > 0){
-    return det > 0;
-  } else {
-    return det < 0;
-  }
+ if (orient > 0)
+ {
+ return det > 0;
+ }
+ else
+ {
+ return det < 0;
+ }
 }
 
-void E(Triangle &t, const std::vector<Point>& V) {
-  t.E.clear();
-  for (int i = 0; i < V.size(); i++){
-    if (i == t.x || i == t.y || i == t.z) continue;
+void E(Triangle &t, const std::vector<Point> &V)
+{
+ t.E.clear();
+ for (int i = 0; i < V.size(); i++)
+ {
+ if (i == t.x || i == t.y || i == t.z)
+ continue;
 
-    if (inCircle(i, t, V)){
-      t.E.push_back(i);
-    }
-  }
+ if (inCircle(i, t, V))
+ {
+ t.E.push_back(i);
+ }
+ }
 }
 
 //! In future might want to ensure all points in input are represented in output!
-bool isDelaunay(const Mesh& M, const std::vector<Point>& V){
+bool isDelaunay(const Mesh &M, const std::vector<Point> &V)
+{
 
-  std::vector<int> found(M.n, 0);
+ std::vector<int> found(M.n, 0);
 
-  //* check all triangles are valid delaunay triangles
-  for (const Triangle& t : M.triangles){
-    if (!t.active) continue;
-    if (t.x >= M.n || t.y >= M.n || t.z >= M.n) continue;
-    //* ignore any triangles containing points that are part of the initial 
-    //* super triangle
+ //* check all triangles are valid delaunay triangles
+ for (const Triangle &t : M.triangles)
+ {
+ if (!t.active)
+ continue;
+ if (t.x >= M.n || t.y >= M.n || t.z >= M.n)
+ continue;
+ //* ignore any triangles containing points that are part of the initial
+ //* super triangle
 
-    //* ensure all points are found
-    found[t.x] ++;
-    found[t.y] ++;
-    found[t.z] ++;
+ //* ensure all points are found
+ found[t.x]++;
+ found[t.y]++;
+ found[t.z]++;
 
-    const Point& a = V[t.x];
-    const Point& b = V[t.y];
-    const Point& c = V[t.z];
+ const Point &a = V[t.x];
+ const Point &b = V[t.y];
+ const Point &c = V[t.z];
 
-    //* ensure triangle isn't degenerate
-    if (orientation(a,b,c) == 0.0f){
-      printf("Degenerate triangle! %d %d %d\n", t.x, t.y, t.z);
-      return false;
-    }
+ //* ensure triangle isn't degenerate
+ if (orientation(a, b, c) == 0.0f)
+ {
+ printf("Degenerate triangle! %d %d %d\n", t.x, t.y, t.z);
+ return false;
+ }
 
-    //* check circumcircle property
-    for (int i = 0; i < V.size(); i++){
-      if (i == t.x || i == t.y || i == t.z) continue;
+ //* check circumcircle property
+ for (int i = 0; i < M.n; i++)
+ {
+ if (i == t.x || i == t.y || i == t.z)
+ continue;
 
-      if (inCircle(i, t, V)){
-        //* 
-        printf("Point %d inside of circumcircle of triangle %d %d %d!\n", i, t.x, t.y, t.z);
-        return false;
-      }
-    }
-  }
+ if (inCircle(i, t, V))
+ {
+ //*
+ printf("Point %d inside of circumcircle of triangle %d %d %d!\n", i, t.x, t.y, t.z);
+ return false;
+ }
+ }
+ }
 
-  for (auto t: found){
-    if (t == 0){
-      return false;
-    }
-  }
+ for (int i = 0; i < found.size(); i++)
+ {
+ if (found[i] == 0)
+ {
+ printf("Missing point %d\n", i);
+ return false;
+ }
+ }
 
-  return true;
+ return true;
 }
 
 
-//detaches triangle t on face f
-void clearNeighbor(Triangle& t, Face f) {
-  //if f is edge (x,y)
-  if ((t.x == f.a && t.y == f.b) || (t.x == f.b && t.y == f.a)) {
-    t.nbr_xy = -1;
-  }
-  else if ((t.y == f.a && t.z == f.b) || (t.y == f.b && t.z == f.a)) {
-    t.nbr_yz = -1;
-  }
-  else if ((t.z == f.a && t.x == f.b) || (t.z == f.b && t.x == f.a)) {
-    t.nbr_zx = -1;
-  }
+// returns true if x is in vec
+bool contains(const std::vector<int> &vec, int x)
+{
+ return std::find(vec.begin(), vec.end(), x) != vec.end();
 }
 
-//set t's neighbor as triangle M.triangles[neighborInd] on face f
-void setNeighbor(Triangle& t, Face f, int neighborInd) {
-  //if f is edge (x,y)
-  if ((t.x == f.a && t.y == f.b) || (t.x == f.b && t.y == f.a)) {
-    t.nbr_xy = neighborInd;
-  }
-  else if ((t.y == f.a && t.z == f.b) || (t.y == f.b && t.z == f.a)) {
-    t.nbr_yz = neighborInd;
-  }
-  else if ((t.z == f.a && t.x == f.b) || (t.z == f.b && t.x == f.a)) {
-    t.nbr_zx = neighborInd;
-  }
+// returns true if edge (a,b) and (c,d) are the same edge
+bool sameEdge(int a, int b, int c, int d)
+{
+ return (a == c && b == d) || (a == d && b == c);
 }
 
-//returns true if x is in vec
-bool contains(const std::vector<int>& vec, int x) {
-  return std::find(vec.begin(), vec.end(), x) != vec.end();
+// returns 0 if t's edge (x,y) is same edges as (a,b)
+// returns 1 if t's edge (y,z) is same edges as (a,b)
+// returns 2 if t's edge (z,x) is same edges as (a,b)
+// returns -1 if none of t's edges is same edges as (a,b)
+int getEdgeInd(const Triangle &t, int a, int b)
+{
+ // edge (x,y)
+ if ((t.x == a && t.y == b) || (t.x == b && t.y == a))
+ {
+ return 0;
+ }
+ // edge (y,z)
+ if ((t.y == a && t.z == b) || (t.y == b && t.z == a))
+ {
+ return 1;
+ }
+ // edge (z,x)
+ if ((t.z == a && t.x == b) || (t.z == b && t.x == a))
+ {
+ return 2;
+ }
+
+ return -1; // none of t's edges match edge (a,b)
 }
 
-//returns true if edge (a,b) and (c,d) are the same edge
-bool sameEdge(int a, int b, int c, int d) {
-  return (a == c && b == d) || (a == d && b == c);
+bool sharedEdgeInfo(const Triangle &t1, const Triangle &t2, int &t1EdgeInd, int &t2EdgeInd)
+{
+ // check against t1 edge (x,y)
+ t2EdgeInd = getEdgeInd(t2, t1.x, t1.y);
+ if (t2EdgeInd != -1)
+ {
+ t1EdgeInd = 0; // indicates t2 is t1's xy neighbor
+ return true;
+ }
+
+ // check against t1 edge (y,z)
+ t2EdgeInd = getEdgeInd(t2, t1.y, t1.z);
+ if (t2EdgeInd != -1)
+ {
+ t1EdgeInd = 1; // indicates t2 is t1's yz neighbor
+ return true;
+ }
+
+ // check against t1 edge (z,x)
+ t2EdgeInd = getEdgeInd(t2, t1.z, t1.x);
+ if (t2EdgeInd != -1)
+ {
+ t1EdgeInd = 2; // indicates t2 is t1's zx neighbor
+ return true;
+ }
+
+ return false; // if none of t1 and t2's edges match
 }
 
-//returns 0 if t's edge (x,y) is same edges as (a,b)
-//returns 1 if t's edge (y,z) is same edges as (a,b)
-//returns 2 if t's edge (z,x) is same edges as (a,b)
-//returns -1 if none of t's edges is same edges as (a,b)
-int getEdgeInd(const Triangle& t, int a, int b) {
-  //edge (x,y)
-  if ((t.x == a && t.y == b) || (t.x == b && t.y == a)) {
-    return 0;
-  }
-  //edge (y,z)
-  if ((t.y == a && t.z == b) || (t.y == b && t.z == a)) {
-    return 1;
-  }
-  //edge (z,x) 
-  if ((t.z == a && t.x == b) || (t.z == b && t.x == a)) {
-    return 2;
-  }
+void connectIfNeighbors(int t1Ind, int t2Ind, Mesh &M)
+{
+ const Triangle &t1 = M.triangles[t1Ind];
+ const Triangle &t2 = M.triangles[t2Ind];
+ int e1, e2;
 
-  return -1; //none of t's edges match edge (a,b)
+ if (sharedEdgeInfo(t1, t2, e1, e2))
+ {
+ //* get the actual vertex IDs for the shared edge from t1s edge index
+ int va, vb;
+ if (e1 == 0)
+ {
+ va = t1.x;
+ vb = t1.y;
+ }
+ else if (e1 == 1)
+ {
+ va = t1.y;
+ vb = t1.z;
+ }
+ else
+ {
+ va = t1.z;
+ vb = t1.x;
+ }
+
+ Face f(va, vb); //* face defined w vertex ids
+ M.face_to_tri[f] = {t1Ind, t2Ind};
+ }
 }
 
+int replaceBoundaryHash(int t0Ind, Face f, int tInd, int v,
+ Mesh &M, std::vector<Point> &V)
+{
+ Triangle &t = M.triangles[tInd];
+ Triangle tt;
+ tt.x = f.a;
+ tt.y = f.b;
+ tt.z = v;
+ tt.active = true;
 
-void setNeighborByEdgeInd(Triangle& t, int edgeInd, int neighborInd) {
-  if (edgeInd == 0) {
-    t.nbr_xy = neighborInd;
-  }
-  else if (edgeInd == 1) {
-    t.nbr_yz = neighborInd;
-  }
-  else if (edgeInd == 2) {
-    t.nbr_zx = neighborInd;
-  }
+ //* compute E(tt)
+ auto tryAdd = [&](int p)
+ {
+ if (p == v)
+ return; //* inserted point no longer uninserted
 
-  //nothing if edgeInd == -1
+ for (int q : tt.E)
+ if (q == p)
+ return; //* avoid duplicates
+
+ if (inCircle(p, tt, V))
+ tt.E.push_back(p);
+ };
+
+ for (int p : t.E)
+ tryAdd(p);
+
+ if (t0Ind != -1)
+ {
+ Triangle &t0 = M.triangles[t0Ind];
+ for (int p : t0.E)
+ tryAdd(p);
+ }
+
+ //* add tris to mesh
+ M.triangles.push_back(tt);
+ int ttInd = (int)M.triangles.size() - 1;
+
+ //* replace t with tt on side of f
+ auto it = M.face_to_tri.find(f);
+
+ if (it == M.face_to_tri.end())
+ {
+ //* should rarely happen?
+ M.face_to_tri[f] = {ttInd, t0Ind};
+ }
+ else
+ {
+ if (it->second.first == tInd)
+ it->second.first = ttInd;
+ else if (it->second.second == tInd)
+ it->second.second = ttInd;
+ else
+ assert(false);
+ }
+
+ //--------------------------------------------------
+ // 5. Add the two side faces of tt
+ //--------------------------------------------------
+ auto addFace = [&](Face nf)
+ {
+ auto jt = M.face_to_tri.find(nf);
+
+ if (jt == M.face_to_tri.end())
+ {
+ M.face_to_tri[nf] = {ttInd, -1};
+ }
+ else if (jt->second.first == -1)
+ {
+ jt->second.first = ttInd;
+ }
+ else if (jt->second.second == -1)
+ {
+ jt->second.second = ttInd;
+ }
+ else
+ {
+ //* already has two neighbors (indicates nonmanifold bug)
+ assert(false);
+ }
+ };
+
+ addFace(Face(f.a, v));
+ addFace(Face(f.b, v));
+
+ //* does not deactivate t here or remove v from tris
+ //* since alg requires old tris to persist until all
+ //* boundary faces have been replaced over rounds
+
+ return ttInd;
 }
 
-bool sharedEdgeInfo(const Triangle& t1, const Triangle& t2, int& t1EdgeInd, int& t2EdgeInd) {
-  //check against t1 edge (x,y)
-  t2EdgeInd = getEdgeInd(t2,t1.x,t1.y);
-  if (t2EdgeInd != -1) {
-    t1EdgeInd = 0; //indicates t2 is t1's xy neighbor
-    return true;
-  }
+int replaceBoundaryHashSeq(int t0Ind, Face f, int tInd, int v, Mesh &M, std::vector<Point> &V)
+{
 
-  //check against t1 edge (y,z)
-  t2EdgeInd = getEdgeInd(t2,t1.y,t1.z);
-  if (t2EdgeInd != -1) {
-    t1EdgeInd = 1; //indicates t2 is t1's yz neighbor
-    return true;
-  }
+ Triangle &t = M.triangles[tInd];
 
-  //check against t1 edge (z,x)
-  t2EdgeInd = getEdgeInd(t2,t1.z,t1.x);
-  if (t2EdgeInd != -1) {
-    t1EdgeInd = 2; //indicates t2 is t1's zx neighbor
-    return true;
-  }
+ // make new triangle tt, from face f and point v
+//  printf("creating new triangle %d %d %d %d\n", M.triangles.size(), f.a, f.b, v);
+ Triangle tt;
+ tt.x = f.a;
+ tt.y = f.b;
+ tt.z = v;
 
-  return false; //if none of t1 and t2's edges match
-}
+ tt.active = true;
 
-void connectIfNeighbors(int t1Ind, int t2Ind, Mesh& M) {
-  int e1, e2;
+ // only check the points in E(t0) and E(t) to make E(tt)
+ for (int i = 0; i < t.E.size(); i++)
+ {
+ int p = t.E[i];
+ if (inCircle(p, tt, V))
+ {
+ tt.E.push_back(p);
+ }
+ }
 
-  if (sharedEdgeInfo(M.triangles[t1Ind], M.triangles[t2Ind], e1, e2)) {
-    setNeighborByEdgeInd(M.triangles[t1Ind], e1, t2Ind);
-    setNeighborByEdgeInd(M.triangles[t2Ind], e2, t1Ind);
-  }
-}
+ if (t0Ind != -1)
+ { // check there is a t0
+ Triangle &t0 = M.triangles[t0Ind];
+ for (int i = 0; i < t0.E.size(); i++)
+ {
+ int p = t0.E[i];
 
+ // avoid duplicates
+ bool duplicate = false;
+ for (int j = 0; j < tt.E.size(); j++)
+ {
+ if (tt.E[j] == p)
+ {
+ duplicate = true;
+ break;
+ }
+ }
 
-int replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Point>& V) {
+ if (!duplicate && inCircle(p, tt, V))
+ {
+ tt.E.push_back(p);
+ }
+ }
+ }
 
-  Triangle& t = M.triangles[tInd];
+ // add tt to M
+ M.triangles.push_back(tt);
 
-  //make new triangle tt, from face f and point v
-  Triangle tt;
-  tt.x = f.a;
-  tt.y = f.b;
-  tt.z = v;
+ int ttInd = (int)M.triangles.size() - 1;
 
-  tt.nbr_xy = -1;
-  tt.nbr_yz = -1;
-  tt.nbr_zx = -1;
-  tt.active = true;
-  
-  //only check the points in E(t0) and E(t) to make E(tt)
-  for (int i = 0; i < t.E.size(); i++) {
-    int p = t.E[i];
-    if (inCircle(p,tt,V)) {
-      tt.E.push_back(p);
-    }
-  }
+ auto it = M.face_to_tri.find(f);
 
-  if (t0Ind != -1) { //check there is a t0
-    Triangle& t0 = M.triangles[t0Ind];
-    for (int i = 0; i < t0.E.size(); i++) {
-      int p = t0.E[i];
+ if (it != M.face_to_tri.end())
+ {
+//  printf("case 1\n");
+ if (it->second.first == tInd)
+ {
+ it->second.first = ttInd;
+//  printf("case 1.1 %d\n", tInd);
+ }
 
-      //avoid duplicates
-      bool duplicate = false;
-      for (int j = 0; j < tt.E.size(); j++) {
-        if (tt.E[j] == p) {
-          duplicate = true;
-          break;
-        }
-      }
+ else if (it->second.second == tInd)
+ it->second.second = ttInd;
+ else
+ assert(false);
+ }
+ else
+ {
+//  printf("case 2\n");
+ M.face_to_tri[f] = {ttInd, t0Ind};
+ }
 
-      if (!duplicate && inCircle(p, tt,V)) {
-        tt.E.push_back(p);
-      }
-    }
-  }
+ Face f1(f.a, v);
+ Face f2(f.b, v);
 
-  //add tt to M
-  M.triangles.push_back(tt);
-  int ttInd = M.triangles.size() -1;
+ auto addFace = [&](Face nf)
+ {
+ auto jt = M.face_to_tri.find(nf);
 
-  //detach t from ONLY face f here in M
-  //this means: before t0 is adjacent to t across f
-  //after t0 is adjacent to tt across f
+ if (jt == M.face_to_tri.end())
+ {
+//  printf("face to add %d %d\n", nf.a, nf.b);
+ M.face_to_tri[nf] = {ttInd, -1};
+ }
+ else
+ {
+ if (jt->second.first == -1)
+ jt->second.first = ttInd;
+ else
+ jt->second.second = ttInd;
+ }
+ };
 
-  clearNeighbor(M.triangles[tInd], f);
+ addFace(f1);
+ addFace(f2);
 
-  //reconnect t0 to tt across face f
-  if (t0Ind != -1) {
-    setNeighbor(M.triangles[t0Ind], f, ttInd);
-    setNeighbor(M.triangles[ttInd],f,t0Ind);
-  }
+ // detach t from ONLY face f here in M
+ // this means: before t0 is adjacent to t across f
+ // after t0 is adjacent to tt across f
 
-  //will do the actual detaching, neigbor stuff later in main (with all the new triangles)
+ // reconnect t0 to tt across face f
 
-  return ttInd;
+ // will do the actual detaching, neigbor stuff later in main (with all the new triangles)
+
+ return ttInd;
 }
 
 //find cavity R: all active triangles whose E set has v's index
@@ -322,7 +477,7 @@ int replaceBoundary(int t0Ind, Face f, int tInd, int v, Mesh& M, std::vector<Poi
 
 
 
-//START DIVIDE AND CONQUER 
+//START DIVIDE AND CONQUER
 
 //orientation test: 2d cross product (b - a) x (c - a)
 //
@@ -336,14 +491,26 @@ double orient2d(const std::vector<Point>& V, const int a, const int b, const int
          - (V[b].y - V[a].y) * (V[c].x - V[a].x);
 }
 
+bool hasEdge(TriangulationDC& T, int a, int b) {
+  const auto& nbrs = T.graph[a];
+  return std::find(nbrs.begin(), nbrs.end(), b) != nbrs.end();
+}
+
 void addGraphEdge(TriangulationDC& T, int a, int b) {
-  T.graph[a].insert(b);
-  T.graph[b].insert(a);
+  if (!hasEdge(T,a,b)) T.graph[a].push_back(b);
+  if (!hasEdge(T,b,a)) T.graph[b].push_back(a);
+  // T.graph[a].insert(b);
+  // T.graph[b].insert(a);
 }
 
 void deleteEdge(TriangulationDC& T, int a, int b) {
-  T.graph[a].erase(b);
-  T.graph[b].erase(a);
+  // T.graph[a].erase(b);
+  // T.graph[b].erase(a);
+  auto& ga = T.graph[a];
+  ga.erase(std::remove(ga.begin(), ga.end(), b), ga.end());
+
+  auto& gb = T.graph[b];
+  gb.erase(std::remove(gb.begin(), gb.end(), a), gb.end());
 }
 
 //returns true if rCand is inside the circumcircle(l,r,lCand)
@@ -390,7 +557,7 @@ TriangulationDC triangulateInit(const std::vector<Point>& V, int lo, int hi) {
     //check for clockwise condition
     double orient = orient2d(V, p0, p1, p2);
 
-    if (orient == 0) { 
+    if (orient == 0) {
       //collinear, so degenerate
       addGraphEdge(T, p0, p1);
       addGraphEdge(T, p1, p2);
@@ -416,80 +583,175 @@ bool between(const std::vector<Point>& V, int a, int b, int p) {
   return std::min(V[a].x, V[b].x) <= V[p].x && V[p].x <= std::max(V[a].x, V[b].x) && std::min(V[a].y, V[b].y) <= V[p].y && V[p].y <= std::max(V[a].y, V[b].y);
 }
 
-
-//finds base LR edge
-//i.e. the lower common tangent (edge from point l in L to point r in R s.t. all points in both triangulations L and R are on or above the line l,r)
+//change algo for finding base LR edge (dont test every L/R pair...)
+//finds the lower common tangent b/w L and R
+//starts from rightmost points of L, leftmost point of R
+//walks along graph edges, adjusting l and r until no adjacent point
+//is below the line l,r
 std::pair<int, int> findBaseLR(const TriangulationDC& L,const TriangulationDC& R,const std::vector<Point>& V) {
   std::vector<int> LV;
   std::vector<int> RV;
 
   for (int i = 0; i < L.graph.size(); i++) {
-    if (!L.graph[i].empty()) {
-      LV.push_back(i);
-    }
+    if (!L.graph[i].empty()) LV.push_back(i);
   }
 
   for (int i = 0; i < R.graph.size(); i++) {
-    if (!R.graph[i].empty()) {
-      RV.push_back(i);
+    if (!R.graph[i].empty()) RV.push_back(i);
+  }
+
+  if (LV.empty() || RV.empty()) return {-1, -1};
+
+  int l = LV[0];
+  //start with rightmost point of L
+  for (int p : LV) {
+    if (V[p].x > V[l].x || (V[p].x == V[l].x && V[p].y < V[l].y)) {
+      l = p;
     }
   }
 
-  //try every possible edge from a left to a right vertex
-  for (int l : LV) {
-    for (int r : RV) {
-      bool isTangent = true;
+  int r = RV[0];
+  //start with leftmost point of R
+  for (int p : RV) {
+    if (V[p].x < V[r].x || (V[p].x == V[r].x && V[p].y < V[r].y)) {
+      r = p;
+    }
+  }
 
-      //make sure no left point is below the line l,r
-      for (int p : LV) {
-        if (p == l) continue;
+  bool changed = true;
 
-        double o = orient2d(V, l, r, p);
+  while (changed) { //keep adjusting l and r until neither needs to move
+    changed = false;
 
-        
-        if (o < 0) { //means p is below/to the right of l,r
-          isTangent = false; //therefore l,r cant be lower tangent
-          break;
-        }
+    //adjust l while one of l's neighbors lies below the current l,r line
+    //if there is this point, then current l,r is not yet the lower tangent
+    for (int p : L.graph[l]) {
+      if (p == r) continue;
 
-        //reject tangent that skips a collinear hull point
-        if (o == 0 && between(V, l, r, p)) { //p collinear (o = 0) and is between l and r
-          //this means l,r skips over a point that is between them
-          isTangent = false; //so reject; want to choose an edge that connects to the closer point instead of skipping it
-          break;
-        }
+      double o = orient2d(V, l, r, p);
+
+      if (o < 0 || (o == 0 && between(V, l, r, p))) {
+        l = p;
+        changed = true;
+        break;
       }
+    }
 
-      if (!isTangent) continue;
+    if (changed) continue;
 
-      //check same conditions for all right points
-      for (int p : RV) {
-        if (p == r) continue;
+    //adjust r while one of r's neighbors lies below the current l,r
+    for (int p : R.graph[r]) {
+      if (p == l) continue;
 
-        double o = orient2d(V, l, r, p);
+      double o = orient2d(V, l, r, p);
 
-        //if point below l,r then it is not the lower tangent
-        if (o < 0) {
-          isTangent = false;
-          break;
-        }
-
-        //reject tangent that skips a collinear point
-        if (o == 0 && between(V, l, r, p)) {
-          isTangent = false;
-          break;
-        }
-      }
-
-      //all points are on/above l,r and no collinear point skipped
-      if (isTangent) {
-        return {l, r}; //base LR-edge
+      if (o < 0 || (o == 0 && between(V, l, r, p))) {
+        r = p;
+        changed = true;
+        break;
       }
     }
   }
-  //no base found...should not happen
-  return {-1, -1};
+
+  //check that if walk above stopped at a bad local min, return fail
+  for (int p : LV) {
+    if (p == l) continue;
+
+    double o = orient2d(V, l, r, p);
+
+    if (o < 0 || (o == 0 && between(V, l, r, p))) {
+      return {-1, -1};
+    }
+  }
+
+  for (int p : RV) {
+    if (p == r) continue;
+
+    double o = orient2d(V, l, r, p);
+
+    if (o < 0 || (o == 0 && between(V, l, r, p))) {
+      return {-1, -1};
+    }
+  }
+
+  return {l, r};
 }
+
+
+//finds base LR edge
+//i.e. the lower common tangent (edge from point l in L to point r in R s.t. all points in both triangulations L and R are on or above the line l,r)
+// std::pair<int, int> findBaseLR(const TriangulationDC& L,const TriangulationDC& R,const std::vector<Point>& V) {
+//   std::vector<int> LV;
+//   std::vector<int> RV;
+
+//   for (int i = 0; i < L.graph.size(); i++) {
+//     if (!L.graph[i].empty()) {
+//       LV.push_back(i);
+//     }
+//   }
+
+//   for (int i = 0; i < R.graph.size(); i++) {
+//     if (!R.graph[i].empty()) {
+//       RV.push_back(i);
+//     }
+//   }
+
+//   //try every possible edge from a left to a right vertex
+//   for (int l : LV) {
+//     for (int r : RV) {
+//       bool isTangent = true;
+
+//       //make sure no left point is below the line l,r
+//       for (int p : LV) {
+//         if (p == l) continue;
+
+//         double o = orient2d(V, l, r, p);
+
+
+//         if (o < 0) { //means p is below/to the right of l,r
+//           isTangent = false; //therefore l,r cant be lower tangent
+//           break;
+//         }
+
+//         //reject tangent that skips a collinear hull point
+//         if (o == 0 && between(V, l, r, p)) { //p collinear (o = 0) and is between l and r
+//           //this means l,r skips over a point that is between them
+//           isTangent = false; //so reject; want to choose an edge that connects to the closer point instead of skipping it
+//           break;
+//         }
+//       }
+
+//       if (!isTangent) continue;
+
+//       //check same conditions for all right points
+//       for (int p : RV) {
+//         if (p == r) continue;
+
+//         double o = orient2d(V, l, r, p);
+
+//         //if point below l,r then it is not the lower tangent
+//         if (o < 0) {
+//           isTangent = false;
+//           break;
+//         }
+
+//         //reject tangent that skips a collinear point
+//         if (o == 0 && between(V, l, r, p)) {
+//           isTangent = false;
+//           break;
+//         }
+//       }
+
+//       //all points are on/above l,r and no collinear point skipped
+//       if (isTangent) {
+//         return {l, r}; //base LR-edge
+//       }
+//     }
+//   }
+//   //no base found...should not happen
+//   return {-1, -1};
+// }
+
 
 //returns index for left candidate point for merge
 int findLeftCandidate(TriangulationDC& T, int l, int r, const std::vector<Point>& V) {
@@ -504,7 +766,7 @@ int findLeftCandidate(TriangulationDC& T, int l, int r, const std::vector<Point>
     double baseX = V[r].x - V[l].x;
     double baseY = V[r].y - V[l].y;
 
-    //vector from l to potCand 
+    //vector from l to potCand
     //"candidate vector"
     double candX = V[potCand].x - V[l].x;
     double candY = V[potCand].y - V[l].y;
@@ -528,7 +790,7 @@ int findLeftCandidate(TriangulationDC& T, int l, int r, const std::vector<Point>
   }
 
   //sorts by angle - want smallest angle to be first potential candidate
-  std::sort(candidates.begin(), candidates.end()); 
+  std::sort(candidates.begin(), candidates.end());
 
   for (int i = 0; i < candidates.size(); i++) {
     int potCand = candidates[i].second;
@@ -536,7 +798,7 @@ int findLeftCandidate(TriangulationDC& T, int l, int r, const std::vector<Point>
     //no next potential candidate means potCand is final (bc dont have a next cand to check in circumcircle)
     if (i+1 >= candidates.size()) {
       return potCand;
-    } 
+    }
 
     int nextPotCand = candidates[i+1].second;
 
@@ -573,10 +835,10 @@ int findRightCandidate(TriangulationDC& T, int l, int r,const std::vector<Point>
     //this is the <180 degree angle check
     //cross < 0: clockwise angle bw 0 and 180 (exclusive)
     //cross =0: angle 0 or 180 (collinear)
-    //cross >0: angle > 180 
+    //cross >0: angle > 180
     if (cross >= 0) continue;
 
-    
+
     double angle = atan2(-cross, dot); //convert clockwise angle to positive for sorting
     candidates.push_back({angle, potCand});
   }
@@ -613,50 +875,222 @@ void addTriangle(TriangulationDC& T, int l, int r, int cand,const std::vector<Po
   addGraphEdge(T, cand, l);
 }
 
-TriangulationDC mergeTriangulations(TriangulationDC L, TriangulationDC R, const std::vector<Point>& V) {
+// TriangulationDC mergeTriangulationsPar(TriangulationDC& L, TriangulationDC& R, const std::vector<Point>& V) {
+//   auto merge0 = std::chrono::steady_clock::now();
+//   TriangulationDC T;
+//   T.graph.resize(V.size());
+
+//   auto g0 = std::chrono::steady_clock::now();
+//   //combine edge graphs
+//   for (int i = 0; i <V.size(); i++) {
+//     T.graph[i].insert(L.graph[i].begin(), L.graph[i].end());
+//     T.graph[i].insert(R.graph[i].begin(), R.graph[i].end());
+//   }
+//   auto g1 = std::chrono::steady_clock::now();
+//   time_graph_combine += std::chrono::duration<double>(g1 - g0).count();
+
+
+//   //find points for base LR edge
+//   auto b0 = std::chrono::steady_clock::now();
+//   std::pair<int, int> baseLR = findBaseLRPar(L, R, V);
+//   auto b1 = std::chrono::steady_clock::now();
+//   time_baseLR += std::chrono::duration<double>(b1 - b0).count();
+
+//   int l = baseLR.first; //left endpoint of base LR edge
+//   int r = baseLR.second; //right endpoint of base LR edge
+
+//   while (true) {
+//     auto c0 = std::chrono::steady_clock::now();
+//     //find left and right candidicates for the baseLR (l,r)
+//     int lCand = findLeftCandidate(T, l, r, V);
+//     int rCand = findRightCandidate(T, l, r, V);
+//     auto c1 = std::chrono::steady_clock::now();
+//     time_candidates += std::chrono::duration<double>(c1 - c0).count();
+
+//     //print debugging statement
+//     // std::cout << "base=(" << l << "," << r << ") " << "lCand=" << lCand << " " << "rCand=" << rCand << "\n";
+
+//     auto a0 = std::chrono::steady_clock::now();
+//     if (lCand == -1 && rCand == -1) {
+//       break; //no candidates found, merge step is done
+//     } else if (lCand != -1 && rCand == -1) { //only left candidate selected
+//       addTriangle(T,l,r,lCand, V); //add baseLR along with the cand
+//       l = lCand; //new base LR edge is lcand with right point from prev base LR
+//     } else if (lCand == -1 && rCand != -1) { //only right candidate selected
+//       addTriangle(T,l,r,rCand, V); //add baseLR along with the cand
+//       r = rCand; //new base LR edge is rCand with left point from prev base LR
+//     } else { //both candidates picked
+//       if (!inCircleDC(V,l,r,lCand,rCand)) { //if right candidate is outside the circumcircle of baseLR (l,r) with left cand, then pick left cand to make new edge
+//         addTriangle(T,l,r,lCand,V);
+//         l = lCand; //new base LR edge is lCand with right point from prev base LR
+//       } else { //i.e. if left candidate is outside the circumcircle of baseLR (l,r) with right cand, then pick right cand to make new edge
+//         addTriangle(T,l,r,rCand,V);
+//         r = rCand; //new base LR edge is rCand with left point from prev base LR
+//       }
+//     }
+//     auto a1 = std::chrono::steady_clock::now();
+//     time_add_edges += std::chrono::duration<double>(a1 - a0).count();
+//   }
+
+// //   std::cout << "add time = " << add_time << "\n";
+//   // std::cout << "baseLR time = " << base_time << "\n";
+// // std::cout << "candidate time = " << cand_time << "\n";
+// auto merge1 = std::chrono::steady_clock::now();
+//   time_merge_total += std::chrono::duration<double>(merge1 - merge0).count();
+//   return T;
+// }
+
+TriangulationDC mergeTriangulations(TriangulationDC& L, TriangulationDC& R, const std::vector<Point>& V, int lo, int hi) {
+  // auto merge0 = std::chrono::steady_clock::now();
+
   TriangulationDC T;
   T.graph.resize(V.size());
 
-  //combine edge graphs
-  for (int i = 0; i <V.size(); i++) {
-    T.graph[i].insert(L.graph[i].begin(), L.graph[i].end());
-    T.graph[i].insert(R.graph[i].begin(), R.graph[i].end());
-  }
+  // auto g0 = std::chrono::steady_clock::now();
+  //could parallelize here...but only worth it for big enough
+  //not really affecting...
+  if (hi - lo > 1024) {
+    #pragma omp parallel for
+    for (int i = lo; i < hi; i++) {
+      // T.graph[i].insert(L.graph[i].begin(), L.graph[i].end());
+      // T.graph[i].insert(R.graph[i].begin(), R.graph[i].end());
+      T.graph[i] = L.graph[i];
 
-  //find points for base LR edge
-  std::pair<int, int> baseLR = findBaseLR(L, R, V);
+      T.graph[i].insert(T.graph[i].end(),R.graph[i].begin(),R.graph[i].end());
 
-  int l = baseLR.first; //left endpoint of base LR edge
-  int r = baseLR.second; //right endpoint of base LR edge
+      std::sort(T.graph[i].begin(), T.graph[i].end());
 
-  while (true) {
-    //find left and right candidicates for the baseLR (l,r)
-    int lCand = findLeftCandidate(T, l, r, V);
-    int rCand = findRightCandidate(T, l, r, V);
+      T.graph[i].erase(std::unique(T.graph[i].begin(), T.graph[i].end()),T.graph[i].end());
+    }
+  } else {
+    for (int i = lo; i < hi; i++) {
+      // T.graph[i].insert(L.graph[i].begin(), L.graph[i].end());
+      // T.graph[i].insert(R.graph[i].begin(), R.graph[i].end());
+      T.graph[i] = L.graph[i];
 
-    //print debugging statement
-    // std::cout << "base=(" << l << "," << r << ") " << "lCand=" << lCand << " " << "rCand=" << rCand << "\n";
+      T.graph[i].insert(T.graph[i].end(),R.graph[i].begin(),R.graph[i].end());
 
-    if (lCand == -1 && rCand == -1) {
-      break; //no candidates found, merge step is done
-    } else if (lCand != -1 && rCand == -1) { //only left candidate selected
-      addTriangle(T,l,r,lCand, V); //add baseLR along with the cand
-      l = lCand; //new base LR edge is lcand with right point from prev base LR
-    } else if (lCand == -1 && rCand != -1) { //only right candidate selected
-      addTriangle(T,l,r,rCand, V); //add baseLR along with the cand
-      r = rCand; //new base LR edge is rCand with left point from prev base LR
-    } else { //both candidates picked
-      if (!inCircleDC(V,l,r,lCand,rCand)) { //if right candidate is outside the circumcircle of baseLR (l,r) with left cand, then pick left cand to make new edge
-        addTriangle(T,l,r,lCand,V);
-        l = lCand; //new base LR edge is lCand with right point from prev base LR
-      } else { //i.e. if left candidate is outside the circumcircle of baseLR (l,r) with right cand, then pick right cand to make new edge
-        addTriangle(T,l,r,rCand,V);
-        r = rCand; //new base LR edge is rCand with left point from prev base LR
-      }
+      std::sort(T.graph[i].begin(), T.graph[i].end());
+
+      T.graph[i].erase(std::unique(T.graph[i].begin(), T.graph[i].end()),T.graph[i].end());
     }
   }
+  // auto g1 = std::chrono::steady_clock::now();
+  // #pragma omp atomic
+  // time_graph_combine += std::chrono::duration<double>(g1 - g0).count();
+
+  // auto b0 = std::chrono::steady_clock::now();
+  std::pair<int, int> baseLR = findBaseLR(L, R, V);
+  // auto b1 = std::chrono::steady_clock::now();
+  // #pragma omp atomic
+  // time_baseLR += std::chrono::duration<double>(b1 - b0).count();
+
+  int l = baseLR.first;
+  int r = baseLR.second;
+
+  while (true) {
+    // auto c0 = std::chrono::steady_clock::now();
+    int lCand = findLeftCandidate(T, l, r, V);
+    int rCand = findRightCandidate(T, l, r, V);
+    // auto c1 = std::chrono::steady_clock::now();
+    // #pragma omp atomic
+    // time_candidates += std::chrono::duration<double>(c1 - c0).count();
+
+    // auto a0 = std::chrono::steady_clock::now();
+
+    if (lCand == -1 && rCand == -1) {
+      break;
+    } else if (lCand != -1 && rCand == -1) {
+      addTriangle(T, l, r, lCand, V);
+      l = lCand;
+    } else if (lCand == -1 && rCand != -1) {
+      addTriangle(T, l, r, rCand, V);
+      r = rCand;
+    } else {
+      if (!inCircleDC(V, l, r, lCand, rCand)) {
+        addTriangle(T, l, r, lCand, V);
+        l = lCand;
+      } else {
+        addTriangle(T, l, r, rCand, V);
+        r = rCand;
+      }
+    }
+
+    // auto a1 = std::chrono::steady_clock::now();
+    // #pragma omp atomic
+    // time_add_edges += std::chrono::duration<double>(a1 - a0).count();
+  }
+
+  // auto merge1 = std::chrono::steady_clock::now();
+  // #pragma omp atomic
+  // time_merge_total += std::chrono::duration<double>(merge1 - merge0).count();
+
   return T;
 }
+
+
+// TriangulationDC mergeTriangulations(TriangulationDC L, TriangulationDC R, const std::vector<Point>& V) {
+//   TriangulationDC T;
+//   T.graph.resize(V.size());
+
+//   //combine edge graphs
+//   for (int i = 0; i <V.size(); i++) {
+//     T.graph[i].insert(L.graph[i].begin(), L.graph[i].end());
+//     T.graph[i].insert(R.graph[i].begin(), R.graph[i].end());
+//   }
+
+//   double base_time = 0.0;
+//   double cand_time = 0.0;
+//   double add_time = 0.0;
+
+//   //find points for base LR edge
+//   auto t0 = std::chrono::steady_clock::now();
+//   std::pair<int, int> baseLR = findBaseLR(L, R, V);
+//   auto t1 = std::chrono::steady_clock::now();
+
+//   base_time += std::chrono::duration<double>(t1 - t0).count();
+
+//   int l = baseLR.first; //left endpoint of base LR edge
+//   int r = baseLR.second; //right endpoint of base LR edge
+
+//   while (true) {
+//     auto c0 = std::chrono::steady_clock::now();
+//     //find left and right candidicates for the baseLR (l,r)
+//     int lCand = findLeftCandidate(T, l, r, V);
+//     int rCand = findRightCandidate(T, l, r, V);
+//     auto c1 = std::chrono::steady_clock::now();
+
+//     cand_time += std::chrono::duration<double>(c1 - c0).count();
+
+//     //print debugging statement
+//     // std::cout << "base=(" << l << "," << r << ") " << "lCand=" << lCand << " " << "rCand=" << rCand << "\n";
+
+//     auto a0 = std::chrono::steady_clock::now();
+//     if (lCand == -1 && rCand == -1) {
+//       break; //no candidates found, merge step is done
+//     } else if (lCand != -1 && rCand == -1) { //only left candidate selected
+//       addTriangle(T,l,r,lCand, V); //add baseLR along with the cand
+//       l = lCand; //new base LR edge is lcand with right point from prev base LR
+//     } else if (lCand == -1 && rCand != -1) { //only right candidate selected
+//       addTriangle(T,l,r,rCand, V); //add baseLR along with the cand
+//       r = rCand; //new base LR edge is rCand with left point from prev base LR
+//     } else { //both candidates picked
+//       if (!inCircleDC(V,l,r,lCand,rCand)) { //if right candidate is outside the circumcircle of baseLR (l,r) with left cand, then pick left cand to make new edge
+//         addTriangle(T,l,r,lCand,V);
+//         l = lCand; //new base LR edge is lCand with right point from prev base LR
+//       } else { //i.e. if left candidate is outside the circumcircle of baseLR (l,r) with right cand, then pick right cand to make new edge
+//         addTriangle(T,l,r,rCand,V);
+//         r = rCand; //new base LR edge is rCand with left point from prev base LR
+//       }
+//     }
+//     auto a1 = std::chrono::steady_clock::now();
+//   }
+
+// //   std::cout << "add time = " << add_time << "\n";
+//   // std::cout << "baseLR time = " << base_time << "\n";
+// // std::cout << "candidate time = " << cand_time << "\n";
+//   return T;
+// }
 
 //divide and conquer recursive algo
 TriangulationDC divideAndConquer(const std::vector<Point>& V, int lo, int hi) {
@@ -673,7 +1107,7 @@ TriangulationDC divideAndConquer(const std::vector<Point>& V, int lo, int hi) {
   TriangulationDC L = divideAndConquer(V, lo, mid);
   TriangulationDC R = divideAndConquer(V, mid, hi);
 
-  return mergeTriangulations(L, R, V);
+  return mergeTriangulations(L, R, V,lo,hi);
 }
 
 //divide and conquer parallel recursive algo
@@ -701,10 +1135,9 @@ TriangulationDC divideAndConquerPar(const std::vector<Point>& V, int lo, int hi)
     R = divideAndConquerPar(V, mid, hi);
   }
 
-
   #pragma omp taskwait
 
-  return mergeTriangulations(L, R, V);
+  return mergeTriangulations(L, R, V,lo,hi);
 }
 
 
@@ -732,7 +1165,7 @@ std::vector<std::vector<int>> findFaces(const TriangulationDC& T,const std::vect
     }
 
     //sort neighbors in counterclockwise order around u
-    std::sort(nbrs[u].begin(), nbrs[u].end(), [&](int a, int b) 
+    std::sort(nbrs[u].begin(), nbrs[u].end(), [&](int a, int b)
       { return getAngle(V, u, a) < getAngle(V, u, b);});
   }
 
@@ -913,7 +1346,7 @@ int main(int argc, char *argv[])
   //* D for divide-and-conquer
   //* S for sequential (incremental)
   if ((input_filename.empty()) || num_threads <= 0 || SA_iters <= 0 ||
-      (parallel_mode != 'I' && parallel_mode != 'D' && parallel_mode != 'S' && parallel_mode != 'P') || batch_size <= 0)
+      (parallel_mode != 'I' && parallel_mode != 'D' && parallel_mode != 'S' && parallel_mode != 'P' && parallel_mode != 'B') || batch_size <= 0)
   {
     std::cerr << "Usage: " << argv[0]
               << " -f input_filename -n num_threads [-p SA_prob] [-i SA_iters] "
@@ -971,113 +1404,407 @@ int main(int argc, char *argv[])
   if (parallel_mode == 'S'){
     Triangle tb;
 
-    //* get bounding box
-    float minx = V[0].x, maxx = V[0].x;
-    float miny = V[0].y, maxy = V[0].y;
-    
-    for (int i = 0; i < n; i++){
-      minx = std::min(V[i].x, minx);
-      maxx = std::max(V[i].x, maxx);
-      miny = std::min(V[i].y, miny);
-      maxy = std::max(V[i].y, maxy);
-    }
-    float d = std::max(maxx-minx, maxy-miny);
-    if (d == 0) d = 1.0;
+ float minx = V[0].x, maxx = V[0].x;
+ float miny = V[0].y, maxy = V[0].y;
+ for (int i = 0; i < n; i++)
+ {
+ minx = std::min(V[i].x, minx);
+ maxx = std::max(V[i].x, maxx);
+ miny = std::min(V[i].y, miny);
+ maxy = std::max(V[i].y, maxy);
+ }
+ float d = std::max(maxx - minx, maxy - miny);
+ if (d == 0)
+ d = 1.0;
 
-    //* super triangle calculation: https://www.gorillasun.de/blog/bowyer-watson-algorithm-for-delaunay-triangulation/#the-super-triangle
-    V.push_back({minx-10*d, miny-10*d});
-    V.push_back({maxx+10*d, miny-10*d});
-    V.push_back({(minx+maxx)/2, maxy+10*d});
+ V.push_back({minx - 2 * d, miny - 2 * d});
+ V.push_back({maxx + 2 * d, miny - 2 * d});
+ V.push_back({(minx + maxx) / 2, maxy + 2 * d});
 
-    tb.x = V.size()-3;
-    tb.y = V.size()-2;  tb.z = V.size()-1;
+ tb.x = V.size() - 3;
+ tb.y = V.size() - 2;
+ tb.z = V.size() - 1;
+ tb.active = true;
+ for (int i = 0; i < n; i++)
+ tb.E.push_back(i);
 
-    tb.nbr_xy = -1;
-    tb.nbr_yz = -1;
-    tb.nbr_zx = -1;
-    tb.active = true;
+ M.triangles.push_back(tb);
+ int tbInd = 0;
+ M.face_to_tri[Face(tb.x, tb.y)] = {tbInd, -1};
+ M.face_to_tri[Face(tb.y, tb.z)] = {tbInd, -1};
+ M.face_to_tri[Face(tb.z, tb.x)] = {tbInd, -1};
 
-    //tb's encroach set is all of V
-    for (int i = 0; i < n; i++) {
-      tb.E.push_back(i);
-    }
+ for (int i = 0; i < n; i++)
+ {
+ // Build cavity R: all active triangles whose E set contains point i
+ std::vector<int> R;
+ for (int j = 0; j < (int)M.triangles.size(); j++)
+ {
+ if (!M.triangles[j].active)
+ continue;
+ if (contains(M.triangles[j].E, i))
+ R.push_back(j);
+ }
 
-    //M = {tb}
-    M.triangles.push_back(tb);
+ std::set<int> R_set(R.begin(), R.end());
+ std::vector<int> new_triangles;
 
-    //iterate through all points: V[i]
-    for (int i = 0; i < n; i++) { //index of corresponding point into V
-      std::vector<int> R;
+ // For each triangle in R, find boundary faces using face_to_tri
+ for (int tInd : R)
+ {
+ Triangle &t = M.triangles[tInd];
+ Face edges[3] = {
+ Face(t.x, t.y),
+ Face(t.y, t.z),
+ Face(t.z, t.x)};
 
-      //build cavity R
-      for (int j = 0; j < M.triangles.size(); j++) {
-        if (!M.triangles[j].active) continue;
+ for (Face &f : edges)
+ {
+ auto it = M.face_to_tri.find(f);
+ if (it == M.face_to_tri.end())
+ continue;
 
-        if (contains(M.triangles[j].E,i)) { //if point i is in E(j), then add j to R 
-          R.push_back(j);
-        }
-      }
+ // Determine the neighbor across this face
+ auto [slotA, slotB] = it->second;
+ int t0Ind = -1;
+ if (slotA == tInd)
+ t0Ind = slotB;
+ else if (slotB == tInd)
+ t0Ind = slotA;
+ else
+ continue; // tInd not in this face entry, skip
 
-      std::vector<int> newTriangles;
+ // Boundary face: neighbor is missing or not in R
+ if (t0Ind == -1 || R_set.find(t0Ind) == R_set.end())
+ {
+ new_triangles.push_back(replaceBoundaryHashSeq(t0Ind, f, tInd, i, M, V));
+ }
+ }
+ }
 
-      for (int t = 0; t < R.size(); t++) { //for each triangle in R, check which are faces - if is, do replacing
-        int tInd = R[t];
+ // Connect new triangles to each other along shared edges
+ for (int a = 0; a < (int)new_triangles.size(); a++)
+ for (int b = a + 1; b < (int)new_triangles.size(); b++)
+ connectIfNeighbors(new_triangles[a], new_triangles[b], M);
 
-        //edge is a face is no other triangle uses it (-1)
-        //or if only triangle outside of R shares it
-        if (M.triangles[tInd].nbr_xy == -1 || !contains(R,M.triangles[tInd].nbr_xy)) { 
-          Face f;
-          f.a = M.triangles[tInd].x;
-          f.b = M.triangles[tInd].y;
-          int t0Ind = M.triangles[tInd].nbr_xy;
+ // Deactivate all triangles in R and clean up their face_to_tri entries
+ for (int tInd : R)
+ {
+ Triangle &t = M.triangles[tInd];
+ for (Face f : {Face(t.x, t.y), Face(t.y, t.z), Face(t.z, t.x)})
+ {
+ auto it = M.face_to_tri.find(f);
+ if (it == M.face_to_tri.end())
+ continue;
 
-          newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
-        }
-        if (M.triangles[tInd].nbr_yz == -1 || !contains(R,M.triangles[tInd].nbr_yz)) {
-          Face f;
-          f.a = M.triangles[tInd].y;
-          f.b = M.triangles[tInd].z;
-          int t0Ind = M.triangles[tInd].nbr_yz;
+ if (it->second.first == tInd)
+ it->second.first = -1;
+ if (it->second.second == tInd)
+ it->second.second = -1;
 
-          newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
-        }
-        if (M.triangles[tInd].nbr_zx == -1 || !contains(R,M.triangles[tInd].nbr_zx)) {
-          Face f;
-          f.a = M.triangles[tInd].z;
-          f.b = M.triangles[tInd].x;
-          int t0Ind = M.triangles[tInd].nbr_zx;
-
-          newTriangles.push_back(replaceBoundary(t0Ind, f, tInd, i, M, V));
-        }
-      }
-
-      //set neighbors for all the added triangles
-      //they should only be with each other (the outside ones were taken care of in replaceBoundary already)
-      for (int a = 0; a < newTriangles.size(); a++) {
-        for (int b = a+1; b < newTriangles.size(); b++) {
-          connectIfNeighbors(newTriangles[a], newTriangles[b], M);
-        }
-      }
-
-      //deactivate all the triangles in R
-      
-      for (int t : R) {
-        M.triangles[t].active = false;
-        //is marking neighbors -1 needed? / wont hurt anything right?
-        M.triangles[t].nbr_xy = -1;
-        M.triangles[t].nbr_yz = -1;
-        M.triangles[t].nbr_zx = -1;
-      }
-
-    }
+ if (it->second.first == -1 && it->second.second == -1)
+ M.face_to_tri.erase(it);
+ }
+ M.triangles[tInd].active = false;
+ }
+ }
   //* parallel incremental
   } else if (parallel_mode == 'I'){
     printf("Starting incremental\n");
+    //* get bounding box
+    Triangle tb;
+
+    float minx = V[0].x, maxx = V[0].x;
+    float miny = V[0].y, maxy = V[0].y;
+
+    for (int i = 0; i < n; i++) {
+      minx = std::min(minx, V[i].x);
+      maxx = std::max(maxx, V[i].x);
+      miny = std::min(miny, V[i].y);
+      maxy = std::max(maxy, V[i].y);
+    }
+
+    float d = std::max(maxx - minx, maxy - miny);
+    if (d == 0) d = 1.0f;
+
+    float value = 10.0f;
+
+    V.push_back({minx - value * d, miny - value * d});
+    V.push_back({maxx + value * d, miny - value * d});
+    V.push_back({(minx + maxx) / 2.0f, maxy + value * d});
+
+    tb.x = (int)V.size() - 3;
+    tb.y = (int)V.size() - 2;
+    tb.z = (int)V.size() - 1;
+    tb.active = true;
+
+for (int i = 0; i < n; i++)
+ tb.E.push_back(i);
+
+ M.triangles.push_back(tb);
+
+ int tbInd = 0;
+ M.face_to_tri[Face(tb.x, tb.y)] = {tbInd, -1};
+ M.face_to_tri[Face(tb.y, tb.z)] = {tbInd, -1};
+ M.face_to_tri[Face(tb.z, tb.x)] = {tbInd, -1};
+
+ //* helpers:
+ auto minE = [](const Triangle &t)
+ {
+ if (!t.active || t.E.empty())
+ return INT_MAX;
+ return *std::min_element(t.E.begin(), t.E.end());
+ };
+
+ auto workRemaining = [&]()
+ {
+ for (auto &t : M.triangles)
+ if (t.active && !t.E.empty())
+ return true;
+ return false;
+ };
+
+ auto isolated = [&](int tid)
+ {
+ for (Face f : {
+ Face(M.triangles[tid].x, M.triangles[tid].y),
+ Face(M.triangles[tid].y, M.triangles[tid].z),
+ Face(M.triangles[tid].z, M.triangles[tid].x)})
+ {
+ auto it = M.face_to_tri.find(f);
+ if (it == M.face_to_tri.end())
+ continue;
+
+ if (it->second.first == tid)
+ return false;
+ if (it->second.second == tid)
+ return false;
+ }
+ return true;
+ };
+
+ omp_set_num_threads(num_threads);
+
+while (workRemaining())
+{
+  //pick one point to insert this round
+  //choose the smallest point index appearing in any active triangle's E set
+  int v = INT_MAX;
+
+#pragma omp parallel
+{
+  int localMinV = INT_MAX;
+
+  #pragma omp for nowait
+  for (int tInd = 0; tInd < (int)M.triangles.size(); tInd++) {
+    Triangle& t = M.triangles[tInd];
+
+    if (!t.active) continue;
+    if (t.E.empty()) continue;
+
+    int localMin = *std::min_element(t.E.begin(), t.E.end());
+    localMinV = std::min(localMinV, localMin);
+  }
+
+  #pragma omp critical
+  {
+    v = std::min(v, localMinV);
+  }
+}
+
+if (v == INT_MAX) {
+  break;
+}
+
+  // std::cout << "Inserting point " << v << "\n";
+
+  // Build cavity R:
+  // all active triangles whose circumcircle contains v.
+  std::vector<int> R;
+  // std::set<int> R_set;
+
+  // for (int tInd = 0; tInd < (int)M.triangles.size(); tInd++) {
+  //   Triangle& t = M.triangles[tInd];
+
+  //   if (!t.active) continue;
+
+  //   if (contains(t.E, v)) {
+  //     R.push_back(tInd);
+  //     R_set.insert(tInd);
+  //   }
+  // }
+  #pragma omp parallel 
+  {
+    std::vector<int> localR;
+
+    #pragma omp for nowait
+    for (int tInd = 0; tInd < (int)M.triangles.size(); tInd++) {
+      Triangle& t = M.triangles[tInd];
+
+      if (!t.active) continue;
+
+      if (contains(t.E,v)) {
+        localR.push_back(tInd);
+      }
+    }
+
+    #pragma omp critical
+    {
+      R.insert(R.end(), localR.begin(), localR.end());
+    }
+  }
+
+  std::set<int> R_set(R.begin(), R.end());
+
+  if (R.empty()) {
+    std::cout << "WARNING: selected point " << v
+              << " but cavity was empty\n";
+    break;
+  }
+
+  //find boundary faces of the cavity
+  //a face is on the boundary if the triangle across it is missing or is not also inside the cavity R
+  std::vector<Task> boundary_tasks;
+
+#pragma omp parallel
+{
+  std::vector<Task> localTasks;
+
+  #pragma omp for nowait
+  for (int idx = 0; idx < (int)R.size(); idx++) {
+    int tInd = R[idx];
+    Triangle& t = M.triangles[tInd];
+
+    Face edges[3] = {
+      Face(t.x, t.y),
+      Face(t.y, t.z),
+      Face(t.z, t.x)
+    };
+
+    for (Face& f : edges) {
+      auto faceIt = M.face_to_tri.find(f);
+
+      if (faceIt == M.face_to_tri.end()) {
+        continue;
+      }
+
+      int a = faceIt->second.first;
+      int b = faceIt->second.second;
+
+      int t0Ind = -1;
+
+      if (a == tInd) {
+        t0Ind = b;
+      } else if (b == tInd) {
+        t0Ind = a;
+      } else {
+        continue;
+      }
+
+      if (t0Ind == -1 || R_set.find(t0Ind) == R_set.end()) {
+        localTasks.push_back(Task{t0Ind, tInd, f, v});
+      }
+    }
+  }
+
+  #pragma omp critical
+  {
+    boundary_tasks.insert(
+      boundary_tasks.end(),
+      localTasks.begin(),
+      localTasks.end()
+    );
+  }
+}
+
+  if (boundary_tasks.empty()) {
+    std::cout << "WARNING: cavity for point " << v
+              << " had no boundary faces\n";
+    break;
+  }
+
+  std::vector<int> new_triangles;
+
+  M.triangles.reserve(M.triangles.size() + boundary_tasks.size());
+
+  //replace every boundary face of the cavity with a new triangle
+  for (const Task& task : boundary_tasks) {
+    int nt = replaceBoundaryHash(
+      task.t0,
+      task.f,
+      task.t,
+      task.v,
+      M,
+      V
+    );
+
+    new_triangles.push_back(nt);
+  }
+
+  //connect new triangles to each other through their shared edges
+  for (int i = 0; i < (int)new_triangles.size(); i++) {
+    for (int j = i + 1; j < (int)new_triangles.size(); j++) {
+      connectIfNeighbors(new_triangles[i], new_triangles[j], M);
+    }
+  }
+
+  //deactivate exactly the old cavity triangles
+  //do NOT deactivate based on isolated faces
+  for (int tInd : R) {
+    Triangle& t = M.triangles[tInd];
+
+    Face edges[3] = {
+      Face(t.x, t.y),
+      Face(t.y, t.z),
+      Face(t.z, t.x)
+    };
+
+    for (Face& f : edges) {
+      auto faceIt = M.face_to_tri.find(f);
+
+      if (faceIt == M.face_to_tri.end()) {
+        continue;
+      }
+
+      if (faceIt->second.first == tInd) {
+        faceIt->second.first = -1;
+      }
+
+      if (faceIt->second.second == tInd) {
+        faceIt->second.second = -1;
+      }
+
+      if (faceIt->second.first == -1 &&
+          faceIt->second.second == -1) {
+        M.face_to_tri.erase(f);
+      }
+    }
+
+    t.active = false;
+  }
+
+  //remove inserted point v from all active E sets
+  #pragma omp parallel for
+for (int i = 0; i < (int)M.triangles.size(); i++) {
+  Triangle& tri = M.triangles[i];
+
+  if (!tri.active) continue;
+
+  tri.E.erase(
+    std::remove(tri.E.begin(), tri.E.end(), v),
+    tri.E.end()
+  );
+}
+
+  //debugging
+  // printMesh(M, V);
+}
   } else if (parallel_mode == 'D'){
     //sequential divide and conquer
     printf("Starting seq divide-and-conquer \n");
     //algorithm based off of Guibas and Stolfi; used this as a reference: http://www.geom.uiuc.edu/~samuelp/del_project.html#algorithms
 
+    // auto s0 = std::chrono::steady_clock::now();
     //order points by x coordinates (use y coords to tie break)
     std::sort(V.begin(), V.end(), [](const Point& a, const Point& b) {
       if (a.x == b.x) {
@@ -1086,6 +1813,8 @@ int main(int argc, char *argv[])
       else {
         return (a.x < b.x);
       } });
+    // auto s1 = std::chrono::steady_clock::now();
+    // time_sort += std::chrono::duration<double>(s1 - s0).count();
 
     // std::cout << "Read " << n << " points:\n";
     // for (int i = 0; i < n; i++) {
@@ -1101,7 +1830,10 @@ int main(int argc, char *argv[])
     }
     sortedPts.close();
 
-    res = divideAndConquer(V, 0, V.size()); 
+    // auto dc0 = std::chrono::steady_clock::now();
+    res = divideAndConquer(V, 0, V.size());
+    // auto dc1 = std::chrono::steady_clock::now();
+    // time_dc_total += std::chrono::duration<double>(dc1 - dc0).count();
 
   } else if (parallel_mode == 'P') {
     //parallel divide and conquer
@@ -1131,14 +1863,49 @@ int main(int argc, char *argv[])
     sortedPts.close();
 
     omp_set_num_threads(num_threads);
+    omp_set_max_active_levels(2);
 
     #pragma omp parallel
     {
       #pragma omp single
       {
-        res = divideAndConquerPar(V, 0, V.size()); 
+        res = divideAndConquerPar(V, 0, V.size());
       }
     }
+
+//   } else if (parallel_mode == 'B') {
+//     auto s0 = std::chrono::steady_clock::now();
+//     //order points by x coordinates (use y coords to tie break)
+//     std::sort(V.begin(), V.end(), [](const Point& a, const Point& b) {
+//       if (a.x == b.x) {
+//         return (a.y < b.y);
+//       }
+//       else {
+//         return (a.x < b.x);
+//       } });
+//       auto s1 = std::chrono::steady_clock::now();
+// time_sort += std::chrono::duration<double>(s1 - s0).count();
+
+//     // std::cout << "Read " << n << " points:\n";
+//     // for (int i = 0; i < n; i++) {
+//     //   std::cout << i << ": (" << V[i].x << ", " << V[i].y << ")\n";
+//     // }
+
+//     //important to do this because need to run the python visualization with the sorted points
+//     std::string name = input_filename.substr(input_filename.find_last_of("/\\") + 1);
+//     std::ofstream sortedPts("inputs/sorted_" + name);
+//     sortedPts << V.size() << "\n";
+//     for (const Point& p : V) {
+//       sortedPts << p.x << " " << p.y << "\n";
+//     }
+//     sortedPts.close();
+
+//     omp_set_num_threads(num_threads);
+
+//     auto dc0 = std::chrono::steady_clock::now();
+//     res = divideAndConquerB(V, 0, V.size());
+//     auto dc1 = std::chrono::steady_clock::now();
+// time_dc_total += std::chrono::duration<double>(dc1 - dc0).count();
 
   } else {
     assert(false);
@@ -1154,11 +1921,11 @@ int main(int argc, char *argv[])
 
   bool valid = false;
 
-  if (parallel_mode == 'S') {
+  if (parallel_mode == 'S' || parallel_mode == 'I') {
     //FOR INCREMENTAL
     valid = isDelaunay(M, V);
 
-  } else if (parallel_mode == 'D' || parallel_mode == 'P') {
+  } else if (parallel_mode == 'D' || parallel_mode == 'P' || parallel_mode == 'B') {
     //FOR DIVIDE AND CONQUER
     valid = isDelaunayDC(res,V);
   }
@@ -1176,16 +1943,16 @@ int main(int argc, char *argv[])
       exit(EXIT_FAILURE);
   }
 
-  if (parallel_mode == 'S') {
+  if (parallel_mode == 'S' || parallel_mode == 'I') {
     //FOR INCREMENTAL
     for (auto &t : M.triangles) {
       if (!t.active) continue;
       if (t.x >= n || t.y >= n || t.z >= n) continue;
-      //* ignore any triangles containing points that are part of the initial 
+      //* ignore any triangles containing points that are part of the initial
       //* super triangle
       out << t.x << " " << t.y << " " << t.z << "\n";
     }
-  } else if (parallel_mode == 'D' || parallel_mode == 'P') {
+  } else if (parallel_mode == 'D' || parallel_mode == 'P' || parallel_mode == 'B') {
     //FOR DIVIDE AND CONQUER
     auto tris = getTriangles(res, V);
 
@@ -1193,6 +1960,17 @@ int main(int argc, char *argv[])
       out << t.v[0] << " " << t.v[1] << " " << t.v[2] << "\n";
     }
   }
+
+//   std::cout << "\n=== Timing Breakdown ===\n";
+// std::cout << "sort time:          " << time_sort << "\n";
+// std::cout << "D&C total time:     " << time_dc_total << "\n";
+// std::cout << "merge total time:   " << time_merge_total << "\n";
+// std::cout << "graph combine time: " << time_graph_combine << "\n";
+// std::cout << "baseLR time:        " << time_baseLR << "\n";
+// std::cout << "candidate time:     " << time_candidates << "\n";
+// std::cout << "add edge time:      " << time_add_edges << "\n";
+// std::cout << "validation time:    " << time_validation << "\n";
+// std::cout << "output time:        " << time_output << "\n";
 
   out.close();
 
